@@ -1,4 +1,5 @@
 package rs;
+
 import org.apache.commons.net.ftp.FTP;
 import org.apache.commons.net.ftp.FTPClient;
 import org.apache.commons.net.ftp.FTPFile;
@@ -45,16 +46,16 @@ public class MyFTPClient {
                 }
             } else {
                 // Code to retrieve and display file content
-            
-                    InputStream inputStream = ftpClient.retrieveFileStream("bonjour.txt");
-                    BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        System.out.println(line);
-                    }
-                    reader.close();
-                    ftpClient.completePendingCommand();
-                
+
+                InputStream inputStream = ftpClient.retrieveFileStream("bonjour.txt");
+                BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    System.out.println(line);
+                }
+                reader.close();
+                ftpClient.completePendingCommand();
+
             }
 
             ftpClient.logout();
