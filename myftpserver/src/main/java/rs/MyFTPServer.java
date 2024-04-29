@@ -53,7 +53,7 @@ public class MyFTPServer {
         user.setName("toto"); // Replace "username" with the desired username
         user.setPassword("tata"); // Replace "password" with the desired password
         String username = user.getName();
-        String homeDirectory = System.getProperty("java.io.tmpdir") + "/ydesene-23/" + username;
+        String homeDirectory = "/dev/shm/ydesene-23/" + username;
         File directory = new File(homeDirectory); // Convert the string to a File object
         if (!directory.exists()) { // Check if the directory exists
             if (directory.mkdirs()) {
