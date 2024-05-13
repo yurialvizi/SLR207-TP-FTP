@@ -18,11 +18,17 @@ import org.apache.ftpserver.usermanager.impl.WritePermission;
 import org.apache.log4j.PropertyConfigurator;
 
 public class MyFTPServer {
+    private int port;
+    private FtpServerFactory serverFactory;
 
-    public static void main(String[] args) {
+    public MyFTPServer(int port) {
+        this.port = port;
+        this.serverFactory = setServerFactory();
+    }
+
+    private FtpServerFactory setServerFactory() {
         PropertyConfigurator.configure(MyFTPServer.class.getResource("/log4J.properties"));
         FtpServerFactory serverFactory = new FtpServerFactory();
-        int port = 3456; // Replace 3456 with the desired port number
 
         ListenerFactory listenerFactory = new ListenerFactory();
         listenerFactory.setPort(port);
@@ -78,15 +84,10 @@ public class MyFTPServer {
         // Set the user manager on the server context
         serverFactory.setUserManager(userManager);
 
-        FtpServer server = serverFactory.createServer();
+        return serverFactory;
+    }
 
-        // start the server
-        try {
-            server.start();
-            System.out.println("FTP Server started on port " + port);
-
-        } catch (FtpException e) {
-            e.printStackTrace();
-        }
+    public FtpServer createServer() {
+        return serverFactory.createServer();
     }
 }
