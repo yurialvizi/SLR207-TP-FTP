@@ -4,13 +4,13 @@ The goal is to run the server in several remote machines and send different mess
 
 To send the server to remote machine:
 
-` scp myftpserver-1-jar-with-dependencies.jar login@server:/tmp/login/server.jar `
+` scp myftpserver-1-jar-with-dependencies.jar login@server:/dev/shm/login/server.jar `
 
 To run the server remotely:
 
 ` ssh login@server `
 
-` java -jar /tmp/login/server.jar `
+` java -jar /dev/shm/login/server.jar `
 
 After this, run the client locally with Maven:
 
