@@ -46,11 +46,11 @@ public class MyFTPClient {
         // content for each node is stored in a separate list
         List<String> contentList = splitContent(contentLines);
 
-        // for (int i = 0; i < totalNodes; i++) {
+        for (int i = 0; i < totalNodes; i++) {
             try {
-                ftpClient.connect(ftpServers.get(0), ftpPort);
+                ftpClient.connect(ftpServers.get(i), ftpPort);
                 if (!ftpClient.login(username, password)) {
-                    System.out.println("FTP login failed for server: " + ftpServers.get(0));
+                    System.out.println("FTP login failed for server: " + ftpServers.get(i));
                     // continue;
                 }
 
@@ -68,7 +68,7 @@ public class MyFTPClient {
                 }
 
                 if (!fileExists) {
-                    String fileContent = contentList.get(0);
+                    String fileContent = contentList.get(i);
                     ByteArrayInputStream inputStream = new ByteArrayInputStream(fileContent.getBytes());
                     ftpClient.storeFile("bonjour.txt", inputStream);
                     int errorCode = ftpClient.getReplyCode();
@@ -94,6 +94,6 @@ public class MyFTPClient {
             } catch (Exception e) {
                 e.printStackTrace();
             }
-        // }
+        }
     }
 }
