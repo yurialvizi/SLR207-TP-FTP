@@ -31,7 +31,7 @@ public class MyFTPClient {
         System.out.println(getCurrentTimestamp() + " " + message);
     }
 
-    public void sendDocuments(String fileName, String content, String server, boolean append) {
+    public void sendDocuments(String fileName, String content, String server) {
         FTPClient ftpClient = new FTPClient();
         try {
             ftpClient.connect(server, ftpPort);
@@ -63,19 +63,6 @@ public class MyFTPClient {
                     log("File " + fileName + " uploaded successfully to the server " + server + ".");
                 }
             } else {
-                if (append) {
-                    content = "\n" + content;
-                    ByteArrayInputStream inputStream = new ByteArrayInputStream(content.getBytes());
-                    ftpClient.appendFile(fileName, inputStream);
-                    int errorCode = ftpClient.getReplyCode();
-                    if (errorCode != 226) {
-                        log("File append failed. FTP Error code: " + errorCode);
-                    } else {
-                        log("File appended successfully.");
-                    }
-                } else {
-                    log("File already exists on the server " + server);
-                }
                 // Code to retrieve and display file content
                 InputStream inputStream = ftpClient.retrieveFileStream(fileName);
                 BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));

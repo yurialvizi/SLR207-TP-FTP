@@ -1,7 +1,9 @@
 package rs;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.util.ArrayList;
@@ -71,7 +73,7 @@ public class Node {
                     for (int i = 0; i < totalNodes; i++) {
                         String content = mapToString(contentToBeSentList.get(i));
                         System.out.println("Map " + i + ": " + content);
-                        myFTPClient.sendDocuments("shuffled_"+ myServer +".txt", content, nodeServerList.get(i), true);
+                        myFTPClient.sendDocuments("shuffled_"+ myServer +".txt", content, nodeServerList.get(i));
                     }
 
                     try {
@@ -87,6 +89,15 @@ public class Node {
 
                     System.out.println("Reduced map: " + reducedMap);
 
+                    String reducedMapString = mapToString(reducedMap);
+
+                    // Write the reduced map to a local file
+                    try (BufferedWriter writer = new BufferedWriter(new FileWriter("toto/reduced.txt"))) {
+                        writer.write(reducedMapString);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }                    
+                    
                     int minValue = getMinValue(reducedMap);
                     int maxValue = getMaxValue(reducedMap);
 
@@ -101,6 +112,26 @@ public class Node {
                     }
                 } else if (message instanceof GroupsMessage) {
                     System.out.println("Received a GroupsMessage from the master.");
+                    GroupsMessage groupsMessage = (GroupsMessage) message;
+                    Map<String, Map<String, Integer>> groups = groupsMessage.getGroups();
+                    System.out.println("Groups: " + groups);
+
+                    String reducedContent;
+
+                    try (BufferedReader reader = new BufferedReader(new FileReader("toto/reduced.txt"))) {
+                        StringBuilder contentBuilder = new StringBuilder();
+                        String line;
+                        while ((line = reader.readLine()) != null) {
+                            contentBuilder.append(line).append("\n");
+                        }
+                        reducedContent = contentBuilder.toString();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                        reducedContent = "";
+                    }
+
+                    sendContentToGroups(groups, reducedContent);
+
                     try {
                         out.writeObject(new FinishedMessage(FinishedPhase.SECOND_SHUFFLE));
                     } catch (IOException e) {
@@ -200,6 +231,31 @@ public class Node {
 
             private int getMaxValue(Map<String, Integer> map) {
                 return map.values().stream().max(Integer::compare).orElse(0);
+            }
+        
+            private void sendContentToGroups(Map<String, Map<String, Integer>> groups, String reducedContent) {
+                System.out.println("Reduced content: " + reducedContent);
+                for (String node : groups.keySet()) {
+                    Map<String, Integer> group = groups.get(node);
+                    int start = group.get("start");
+                    int end = group.get("end");
+                    // Get all keys which values are between start and end
+                    StringBuilder contentBuilder = new StringBuilder();
+                    for (String key : reducedContent.split("\n")) {
+                        String[] parts = key.split(":");
+                        if (parts.length == 2) {
+                            int value = Integer.parseInt(parts[1].trim());
+                            if (value >= start && value <= end) {
+                                contentBuilder.append(key).append("\n");
+                            }
+                        }
+                    }
+                    String content = contentBuilder.toString();
+
+                    System.out.println("Sending content to " + node + ": " + content);
+
+                    myFTPClient.sendDocuments("grouped_" + myServer + ".txt", content, node);
+                }
             }
         };
     }

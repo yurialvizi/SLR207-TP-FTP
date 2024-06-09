@@ -7,6 +7,8 @@ public class ReduceFinishedMessage extends Message{
 
     public ReduceFinishedMessage(int min, int max) {
         super();
+        this.min = min;
+        this.max = max;
     }
 
     public int getMin() {

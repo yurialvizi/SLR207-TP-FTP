@@ -58,24 +58,10 @@ public class Master {
             myFTPClient.prepareNode(nodes.get(i));
         }
         
-        // // Wait 1s to make sure the nodes are ready
-        // try {
-        //     Thread.sleep(1000);
-        // } catch (InterruptedException e) {
-        //     e.printStackTrace();
-        // }
-        
         for (int i = 0; i < totalNodes; i++) {
-            myFTPClient.sendDocuments(initialRemoteFileName, distributedContentList.get(i), nodes.get(i), false);
+            myFTPClient.sendDocuments(initialRemoteFileName, distributedContentList.get(i), nodes.get(i));
         }
         
-        // // Wait 1s for the nodes to start
-        // try {
-        //     Thread.sleep(1000);
-        // } catch (InterruptedException e) {
-        //     e.printStackTrace();
-        // }
-
         // Shuffle phase
         
         List<Future<?>> futures = new ArrayList<>();
@@ -144,10 +130,12 @@ public class Master {
         }
 
         // TODO: tratar se algum nao terminou o reduce
-        
+        System.out.println("Min list: " + minList);
+        System.out.println("Max list: " + maxList);
         int min = minList.stream().min(Integer::compare).get();
         int max = maxList.stream().max(Integer::compare).get();
-        int groupSize = (int) Math.ceil((max - min + 1) / totalNodes);
+        System.out.println("Min: " + min + " Max: " + max);
+        int groupSize = (int) Math.ceil((double) (max - min + 1) / totalNodes);
         Map<String, Map<String, Integer>> groups = new HashMap<>();
         
         for (int i = 0; i < totalNodes; i++) {
