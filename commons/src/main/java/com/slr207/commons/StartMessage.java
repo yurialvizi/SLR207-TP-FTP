@@ -5,25 +5,25 @@ import java.util.List;
 public class StartMessage extends Message {
     private static final long serialVersionUID = 1L;
     private final int totalNodes;
-    private final List<String> nodeIPList;
-    private final String masterIP;
+    private final List<String> nodeServerList;
+    private final String yourOwnServer;
 
-    public StartMessage(int totalNodes, List<String> nodeIPList, String masterIP) {
+    public StartMessage(int totalNodes, List<String> nodeServerList, String yourOwnServer) {
         super();
         this.totalNodes = totalNodes;
-        this.nodeIPList = nodeIPList;
-        this.masterIP = masterIP;
+        this.nodeServerList = nodeServerList;
+        this.yourOwnServer = yourOwnServer;
     }
     
     public int getTotalNodes() {
         return totalNodes;
     }
-    
-    public List<String> getNodeIPList() {
-        return nodeIPList;
+
+    public String getYourOwnServer() {
+        return yourOwnServer;
     }
     
-    public String getMasterIP() {
-        return masterIP;
+    public List<String> getNodeServerList() {
+        return nodeServerList;
     }
 }

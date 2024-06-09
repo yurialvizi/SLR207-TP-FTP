@@ -1,78 +1,254 @@
 package rs;
 
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.io.ObjectOutputStream;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
+import com.slr207.commons.FinishedMessage;
+import com.slr207.commons.GroupsMessage;
 import com.slr207.commons.Message;
-import com.slr207.commons.MessageProcessor;
-import com.slr207.commons.Receiver;
+import com.slr207.commons.MyFTPClient;
+import com.slr207.commons.ReduceFinishedMessage;
+import com.slr207.commons.ReduceMessage;
+import com.slr207.commons.SecondReduceMessage;
 import com.slr207.commons.Sender;
 import com.slr207.commons.StartMessage;
 
 public class Master {
     
     public static void main(String[] args) {
-        List<String> remoteMachines = new ArrayList<String>(
-            Arrays.asList("tp-3b07-14", "tp-3b07-15", "tp-3c41-02"));
-        String contentFileName = "storage.csv";
-        String myIP = "";
+        String nodesFileName = "machines.txt";
+        String initialRemoteFileName = "initial-storage.txt";
+
+        List<String> nodes = new ArrayList<>();
+        try (BufferedReader br = new BufferedReader(new FileReader(nodesFileName))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                nodes.add(line);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        int totalNodes = nodes.size();
+        String storageFileName = "storage.csv";
+
+        ExecutorService executor = Executors.newFixedThreadPool(totalNodes);
     
         int ftpPort = 2505;
         int senderPort = 5524;
-        int receiverPort = 1254;
     
         String username = "toto";
         String password = "tata";
 
-        MessageProcessor msgProcessor = createMessageProcessor();
+        MyFTPClient myFTPClient = new MyFTPClient(ftpPort, username, password);
 
-        MyFTPClient myFTPClient = new MyFTPClient(remoteMachines, ftpPort, username, password);
-        Sender sender = new Sender(remoteMachines, senderPort);
+        List<String> readContent = readStorageFile(storageFileName, myFTPClient, totalNodes);
 
-        Receiver receiver;
+        List<String> distributedContentList = distributeContentLines(readContent, totalNodes);
+
+        for (int i = 0; i < totalNodes; i++) {
+            myFTPClient.prepareNode(nodes.get(i));
+        }
         
-        try {
-            receiver = new Receiver(receiverPort, msgProcessor);
-            Thread receiverThread = new Thread(receiver);
-            receiverThread.start();
-        } catch (IOException e) {
-            e.printStackTrace();
+        // // Wait 1s to make sure the nodes are ready
+        // try {
+        //     Thread.sleep(1000);
+        // } catch (InterruptedException e) {
+        //     e.printStackTrace();
+        // }
+        
+        for (int i = 0; i < totalNodes; i++) {
+            myFTPClient.sendDocuments(initialRemoteFileName, distributedContentList.get(i), nodes.get(i), false);
+        }
+        
+        // // Wait 1s for the nodes to start
+        // try {
+        //     Thread.sleep(1000);
+        // } catch (InterruptedException e) {
+        //     e.printStackTrace();
+        // }
+
+        // Shuffle phase
+        
+        List<Future<?>> futures = new ArrayList<>();
+        List<Sender> senders = new ArrayList<>();
+        
+        for (String node : nodes) {
+            StartMessage startMessage = new StartMessage(totalNodes, nodes, node);
+            Sender sender = new Sender(node, senderPort, startMessage);
+            senders.add(sender);
+            futures.add(executor.submit(sender));
         }
 
-        splitStorage(contentFileName, myFTPClient);
+        // Wait for all the threads to finish
+        for (Future<?> future : futures) {
+            try {
+                future.get();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
 
-        StartMessage startMessage = new StartMessage(remoteMachines.size(), remoteMachines, myIP);
+        boolean allFinishedShuffle = true;
+        for (Sender sender : senders) {
+            Message responseMsg = sender.getResponse();
+            if (!(responseMsg instanceof FinishedMessage)) {
+                allFinishedShuffle = false;
+                break;
+            }
+        }
         
-        sender.sendMessage(startMessage);
+        // TODO: tratar se algum nao terminou o shuffle
+
+        // Reduce phase
+
+        futures.clear();
+        senders.clear();
+
+        for (String node : nodes) {
+            Sender sender = new Sender(node, senderPort, new ReduceMessage());
+            senders.add(sender);
+            futures.add(executor.submit(sender));
+        } 
+
+        // Wait for all the threads to finish
+        for (Future<?> future : futures) {
+            try {
+                future.get();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+        List<Integer> minList = new ArrayList<>();
+        List<Integer> maxList = new ArrayList<>();
+        boolean allFinishedReduce = true;
+        for (Sender sender : senders) {
+            Message responseMsg = sender.getResponse();
+            if (!(responseMsg instanceof ReduceFinishedMessage)) {
+                allFinishedReduce = false;
+                break;
+            } else {
+                ReduceFinishedMessage reduceFinishedMessage = (ReduceFinishedMessage) responseMsg;
+                minList.add(reduceFinishedMessage.getMin());
+                maxList.add(reduceFinishedMessage.getMax());
+            }
+        }
+
+        // TODO: tratar se algum nao terminou o reduce
+        
+        int min = minList.stream().min(Integer::compare).get();
+        int max = maxList.stream().max(Integer::compare).get();
+        int groupSize = (int) Math.ceil((max - min + 1) / totalNodes);
+        Map<String, Map<String, Integer>> groups = new HashMap<>();
+        
+        for (int i = 0; i < totalNodes; i++) {
+            int start = min + i * groupSize;
+            int end = Math.min(max, start + groupSize - 1);
+            Map<String, Integer> group = new HashMap<>();
+            group.put("start", start);
+            group.put("end", end);
+            groups.put(nodes.get(i), group);
+        }
+
+        
+        // Group/second shuffle phase
+        futures.clear();
+        senders.clear();
+
+        for (String node : nodes) {
+            Sender sender = new Sender(node, senderPort, new GroupsMessage(groups));
+            senders.add(sender);
+            futures.add(executor.submit(sender));
+        }
+
+        // Wait for all the threads to finish
+        for (Future<?> future : futures) {
+            try {
+                future.get();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+        boolean allFinishedSecondShuffle = true;
+        for (Sender sender : senders) {
+            Message responseMsg = sender.getResponse();
+            if (!(responseMsg instanceof FinishedMessage)) { // TODO: corrigir isso
+                allFinishedSecondShuffle = false;
+                break;
+            }
+        }
+
+        // TODO: tratar se algum nao terminou o second shuffle
+
+        // Second reduce phase
+        futures.clear();
+        senders.clear();
+
+        for (String node : nodes) {
+            Sender sender = new Sender(node, senderPort, new SecondReduceMessage());
+            senders.add(sender);
+            futures.add(executor.submit(sender));
+        }
+
+        // Wait for all the threads to finish
+        for (Future<?> future : futures) {
+            try {
+                future.get();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+        boolean allFinishedSecondReduce = true;
+        for (Sender sender : senders) {
+            Message responseMsg = sender.getResponse();
+            if (!(responseMsg instanceof ReduceFinishedMessage)) {
+                allFinishedSecondReduce = false;
+                break;
+            }
+        }
+
+        // TODO: tratar se algum nao terminou o second reduce
+
+        executor.shutdown();
     }
 
-    private static void splitStorage(String contentFileName, MyFTPClient myFTPClient) {
-        List<String> content = new ArrayList<>();
+    private static List<String> readStorageFile(String contentFileName, MyFTPClient myFTPClient, int totalNodes) {
+        List<String> readContent = new ArrayList<>();
         try (BufferedReader br = new BufferedReader(new FileReader(contentFileName))) {
             String line;
             while ((line = br.readLine()) != null) {
-                content.add(line);
+                readContent.add(line);
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
         
-        myFTPClient.sendDocumentsToAll(content);
+        return readContent;
     }
 
-    private static MessageProcessor createMessageProcessor() {
-        return new MessageProcessor() {
-            @Override
-            public void process(Message message, ObjectOutputStream out) {
-                System.out.println("(Unimplemented method) Message received:");
-            }
-        };
+    private static List<String> distributeContentLines(List<String> content, int totalNodes) {
+        List<String> contentList = new ArrayList<>();
+        for (int i = 0; i < totalNodes; i++) {
+            contentList.add(new String());
+        }
+
+        // Distribute content lines separated by a newline character to each node 
+        for (int i = 0; i < content.size(); i++) {
+            contentList.set(i % totalNodes, contentList.get(i % totalNodes) + content.get(i) + "\n");
+        }
+
+        return contentList;
     }
     
 }

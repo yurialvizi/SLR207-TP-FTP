@@ -1,22 +1,40 @@
 #!/bin/bash
-# A simple variable example
+ 
+# your list of hosts file that should contain each host in a separate line
+computers=`cat machines.txt | xargs -I {} echo {}`
+# your login 
 login="ydesene-23"
-remoteFolder="/tmp/$login/"
-fileName="SimpleServerProgram"
+# skip host key checking MAJOR SECURITY RISK :-DD
+sshopts="-o StrictHostKeyChecking=no"
+ 
+remoteFolder="/dev/shm/$login/"
+mvn clean compile assembly:single
+fileName="myftpserver-1-jar-with-dependencies"
 fileExtension=".jar"
-computers=("tp-3b07-14" "tp-3b07-15" "tp-3c41-02" "tp-3c41-05" "tp-3b41-10")
-#computers=("tp-1a226-01")
+ 
+ 
 for c in ${computers[@]}; do
-  command0=("ssh" "$login@$c" "lsof -ti | xargs kill -9")
-  command1=("ssh" "$login@$c" "rm -rf $remoteFolder;mkdir $remoteFolder")
-  command2=("scp" "$fileName$fileExtension" "$login@$c:$remoteFolder$fileName$fileExtension")
-  command3=("ssh" "$login@$c" "cd $remoteFolder;javac $fileName$fileExtension;java $fileName")
+  command0="gpg -d -q ~/.password.gpg | sshpass ssh $sshopts $login@$c"
+  command1="gpg -d -q ~/.password.gpg | sshpass ssh $sshopts $login@$c 'rm -rf $remoteFolder;mkdir $remoteFolder'"
+  command2="gpg -d -q ~/.password.gpg | sshpass scp $sshopts myftpserver/target/$fileName$fileExtension $login@$c:$remoteFolder$fileName$fileExtension"
   echo ${command0[*]}
-  "${command0[@]}"
+  eval $command0
   echo ${command1[*]}
-  "${command1[@]}"
+  eval $command1
   echo ${command2[*]}
-  "${command2[@]}"
-  echo ${command3[*]}
-  "${command3[@]}" &
+  eval $command2
 done
+ 
+# for c in ${computers[@]}; do 
+#   while true; do
+#     command3="gpg -d -q ~/.password.gpg | sshpass ssh $sshopts $login@$c 'cd $remoteFolder; nohup java -jar $fileName$fileExtension -Xmx4096m 1>/dev/null 2>/dev/null &'"
+#     echo $c
+#     echo ${command3[*]}
+#     $(eval $command3)
+#     if [ $? -ne 0 ]; then
+#       echo "Error while executing command, retrying"
+#     else
+#       break
+#     fi
+#   done
+# done
