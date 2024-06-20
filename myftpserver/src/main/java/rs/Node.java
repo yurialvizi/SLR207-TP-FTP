@@ -13,19 +13,21 @@ import java.util.Map;
 
 import org.apache.ftpserver.FtpServer;
 
-import com.slr207.commons.FinishedMessage;
-import com.slr207.commons.FinishedMessage.FinishedPhase;
-import com.slr207.commons.GroupsMessage;
-import com.slr207.commons.Message;
+import com.slr207.commons.messages.FirstShuffleFinishedMessage;
+import com.slr207.commons.messages.FirstReduceFinishedMessage;
+import com.slr207.commons.messages.FirstReduceMessage;
+import com.slr207.commons.messages.FirstShuffleMessage;
+import com.slr207.commons.messages.GroupsMessage;
+import com.slr207.commons.messages.Message;
+import com.slr207.commons.messages.SecondMapFinishedMessage;
+import com.slr207.commons.messages.SecondReduceFinishedMessage;
+import com.slr207.commons.messages.SecondReduceMessage;
+import com.slr207.commons.messages.SecondShuffleFinishedMessage;
+import com.slr207.commons.messages.SecondShuffleMessage;
+import com.slr207.commons.messages.StartMessage;
 import com.slr207.commons.MessageProcessor;
 import com.slr207.commons.MyFTPClient;
 import com.slr207.commons.Receiver;
-import com.slr207.commons.ReduceFinishedMessage;
-import com.slr207.commons.ReduceMessage;
-import com.slr207.commons.SecondReduceMessage;
-import com.slr207.commons.SecondShuffleMessage;
-import com.slr207.commons.ShuffleMessage;
-import com.slr207.commons.StartMessage;
 
 public class Node {
     public static void main(String[] args) {
@@ -81,12 +83,12 @@ public class Node {
                     } 
 
                     try {
-                        out.writeObject(new FinishedMessage(FinishedPhase.FIRST_MAP));
+                        out.writeObject(new FirstShuffleFinishedMessage());
                     } catch (IOException e) {
                         // TODO Auto-generated catch block
                         e.printStackTrace();
                     }
-                } else if (message instanceof ShuffleMessage) {
+                } else if (message instanceof FirstShuffleMessage) {
                     System.out.println("Received a ShuffleMessage from the master.");
                     Map<String, Integer> mappedContent = new HashMap<>();
 
@@ -118,12 +120,12 @@ public class Node {
                     }
 
                     try {
-                        out.writeObject(new FinishedMessage(FinishedPhase.FIRST_SHUFFLE));
+                        out.writeObject(new FirstShuffleFinishedMessage());
                     } catch (IOException e) {
                         // TODO Auto-generated catch block
                         e.printStackTrace();
                     }
-                } else if (message instanceof ReduceMessage) {
+                } else if (message instanceof FirstReduceMessage) {
                     System.out.println("Received a ReduceMessage from the master.");
 
                     Map<String, Integer> reducedMap = reduce();
@@ -146,7 +148,7 @@ public class Node {
                     System.out.println("Max value: " + maxValue);
 
                     try {
-                        out.writeObject(new ReduceFinishedMessage(minValue, maxValue));
+                        out.writeObject(new FirstReduceFinishedMessage(minValue, maxValue));
                     } catch (IOException e) {
                         // TODO Auto-generated catch block
                         e.printStackTrace();
@@ -174,7 +176,7 @@ public class Node {
                     secondMap = secondMap(groups, reducedContent);
                 
                     try {
-                        out.writeObject(new FinishedMessage(FinishedPhase.SECOND_MAP));
+                        out.writeObject(new SecondMapFinishedMessage());
                     } catch (IOException e) {
                         // TODO Auto-generated catch block
                         e.printStackTrace();
@@ -186,7 +188,7 @@ public class Node {
                     secondMap.clear();
 
                     try {
-                        out.writeObject(new FinishedMessage(FinishedPhase.SECOND_SHUFFLE));
+                        out.writeObject(new SecondShuffleFinishedMessage());
                     } catch (IOException e) {
                         // TODO Auto-generated catch block
                         e.printStackTrace();
@@ -240,7 +242,7 @@ public class Node {
                     }  
 
                     try {
-                        out.writeObject(new FinishedMessage(FinishedPhase.SECOND_REDUCE));
+                        out.writeObject(new SecondReduceFinishedMessage());
                     } catch (IOException e) {
                         // TODO Auto-generated catch block
                         e.printStackTrace();

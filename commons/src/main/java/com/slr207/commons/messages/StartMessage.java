@@ -1,4 +1,4 @@
-package com.slr207.commons;
+package com.slr207.commons.messages;
 
 import java.util.List;
 
@@ -9,7 +9,7 @@ public class StartMessage extends Message {
     private final String yourOwnServer;
 
     public StartMessage(int totalNodes, List<String> nodeServerList, String yourOwnServer) {
-        super();
+        super(MessageType.START);
         this.totalNodes = totalNodes;
         this.nodeServerList = nodeServerList;
         this.yourOwnServer = yourOwnServer;

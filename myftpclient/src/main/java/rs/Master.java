@@ -11,17 +11,17 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
-import com.slr207.commons.FinishedMessage;
-import com.slr207.commons.GroupsMessage;
-import com.slr207.commons.Message;
 import com.slr207.commons.MyFTPClient;
-import com.slr207.commons.ReduceFinishedMessage;
-import com.slr207.commons.ReduceMessage;
-import com.slr207.commons.SecondReduceMessage;
-import com.slr207.commons.SecondShuffleMessage;
 import com.slr207.commons.Sender;
-import com.slr207.commons.ShuffleMessage;
-import com.slr207.commons.StartMessage;
+import com.slr207.commons.messages.FinishedPhaseMessage;
+import com.slr207.commons.messages.FirstReduceFinishedMessage;
+import com.slr207.commons.messages.FirstReduceMessage;
+import com.slr207.commons.messages.FirstShuffleMessage;
+import com.slr207.commons.messages.GroupsMessage;
+import com.slr207.commons.messages.Message;
+import com.slr207.commons.messages.SecondReduceMessage;
+import com.slr207.commons.messages.SecondShuffleMessage;
+import com.slr207.commons.messages.StartMessage;
 
 public class Master {
     
@@ -103,7 +103,7 @@ public class Master {
         senders.clear();
         
         tempTime = System.nanoTime();
-        ShuffleMessage shuffleMessage = new ShuffleMessage();
+        FirstShuffleMessage shuffleMessage = new FirstShuffleMessage();
         for (String node : nodes) {
             Sender sender = new Sender(node, senderPort, shuffleMessage);
             senders.add(sender);
@@ -124,7 +124,7 @@ public class Master {
         boolean allFinishedShuffle = true;
         for (Sender sender : senders) {
             Message responseMsg = sender.getResponse();
-            if (!(responseMsg instanceof FinishedMessage)) {
+            if (!(responseMsg instanceof FinishedPhaseMessage)) {
                 allFinishedShuffle = false;
                 break;
             }
@@ -139,7 +139,7 @@ public class Master {
         
         tempTime = System.nanoTime();
         for (String node : nodes) {
-            Sender sender = new Sender(node, senderPort, new ReduceMessage());
+            Sender sender = new Sender(node, senderPort, new FirstReduceMessage());
             senders.add(sender);
             futures.add(executor.submit(sender));
         }
@@ -163,11 +163,11 @@ public class Master {
         boolean allFinishedReduce = true;
         for (Sender sender : senders) {
             Message responseMsg = sender.getResponse();
-            if (!(responseMsg instanceof ReduceFinishedMessage)) {
+            if (!(responseMsg instanceof FirstReduceFinishedMessage)) {
                 allFinishedReduce = false;
                 break;
             } else {
-                ReduceFinishedMessage reduceFinishedMessage = (ReduceFinishedMessage) responseMsg;
+                FirstReduceFinishedMessage reduceFinishedMessage = (FirstReduceFinishedMessage) responseMsg;
                 minList.add(reduceFinishedMessage.getMin());
                 maxList.add(reduceFinishedMessage.getMax());
             }
@@ -222,7 +222,7 @@ public class Master {
         boolean allFinishedSecondShuffle = true;
         for (Sender sender : senders) {
             Message responseMsg = sender.getResponse();
-            if (!(responseMsg instanceof FinishedMessage)) { // TODO: corrigir isso
+            if (!(responseMsg instanceof FinishedPhaseMessage)) { // TODO: corrigir isso
                 allFinishedSecondShuffle = false;
                 break;
             }
@@ -280,7 +280,7 @@ public class Master {
         boolean allFinishedSecondReduce = true;
         for (Sender sender : senders) {
             Message responseMsg = sender.getResponse();
-            if (!(responseMsg instanceof FinishedMessage)) {
+            if (!(responseMsg instanceof FinishedPhaseMessage)) {
                 allFinishedSecondReduce = false;
                 break;
             }
