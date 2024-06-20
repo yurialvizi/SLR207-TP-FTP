@@ -13,18 +13,7 @@ import java.util.Map;
 
 import org.apache.ftpserver.FtpServer;
 
-import com.slr207.commons.messages.FirstShuffleFinishedMessage;
-import com.slr207.commons.messages.FirstReduceFinishedMessage;
-import com.slr207.commons.messages.FirstReduceMessage;
-import com.slr207.commons.messages.FirstShuffleMessage;
-import com.slr207.commons.messages.GroupsMessage;
-import com.slr207.commons.messages.Message;
-import com.slr207.commons.messages.SecondMapFinishedMessage;
-import com.slr207.commons.messages.SecondReduceFinishedMessage;
-import com.slr207.commons.messages.SecondReduceMessage;
-import com.slr207.commons.messages.SecondShuffleFinishedMessage;
-import com.slr207.commons.messages.SecondShuffleMessage;
-import com.slr207.commons.messages.StartMessage;
+import com.slr207.commons.messages.*;
 import com.slr207.commons.MessageProcessor;
 import com.slr207.commons.MyFTPClient;
 import com.slr207.commons.Receiver;

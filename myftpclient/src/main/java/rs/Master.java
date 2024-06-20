@@ -13,15 +13,7 @@ import java.util.concurrent.Future;
 
 import com.slr207.commons.MyFTPClient;
 import com.slr207.commons.Sender;
-import com.slr207.commons.messages.FinishedPhaseMessage;
-import com.slr207.commons.messages.FirstReduceFinishedMessage;
-import com.slr207.commons.messages.FirstReduceMessage;
-import com.slr207.commons.messages.FirstShuffleMessage;
-import com.slr207.commons.messages.GroupsMessage;
-import com.slr207.commons.messages.Message;
-import com.slr207.commons.messages.SecondReduceMessage;
-import com.slr207.commons.messages.SecondShuffleMessage;
-import com.slr207.commons.messages.StartMessage;
+import com.slr207.commons.messages.*;
 
 public class Master {
     
@@ -74,7 +66,7 @@ public class Master {
         List<Future<?>> futures = new ArrayList<>();
         List<Sender> senders = new ArrayList<>();
         
-        // Map phase
+        // ********** FIRST MAP PHASE **********
         
         tempTime = System.nanoTime();
         for (String node : nodes) {
@@ -97,7 +89,7 @@ public class Master {
 
         computationTime += System.nanoTime() - tempTime;
         
-        // Shuffle phase
+        // ********** FIRST SHUFFLE PHASE **********
 
         futures.clear();
         senders.clear();
@@ -121,18 +113,7 @@ public class Master {
 
         communicationTime += System.nanoTime() - tempTime;
         
-        boolean allFinishedShuffle = true;
-        for (Sender sender : senders) {
-            Message responseMsg = sender.getResponse();
-            if (!(responseMsg instanceof FinishedPhaseMessage)) {
-                allFinishedShuffle = false;
-                break;
-            }
-        }
-        
-        // TODO: tratar se algum nao terminou o shuffle
-
-        // Reduce phase
+        // ********** FIRST REDUCE PHASE **********
 
         futures.clear();
         senders.clear();
@@ -156,24 +137,16 @@ public class Master {
                 e.printStackTrace();
             }
         }
-
         
         List<Integer> minList = new ArrayList<>();
         List<Integer> maxList = new ArrayList<>();
-        boolean allFinishedReduce = true;
         for (Sender sender : senders) {
             Message responseMsg = sender.getResponse();
-            if (!(responseMsg instanceof FirstReduceFinishedMessage)) {
-                allFinishedReduce = false;
-                break;
-            } else {
-                FirstReduceFinishedMessage reduceFinishedMessage = (FirstReduceFinishedMessage) responseMsg;
-                minList.add(reduceFinishedMessage.getMin());
-                maxList.add(reduceFinishedMessage.getMax());
-            }
+            FirstReduceFinishedMessage reduceFinishedMessage = (FirstReduceFinishedMessage) responseMsg;
+            minList.add(reduceFinishedMessage.getMin());
+            maxList.add(reduceFinishedMessage.getMax());
         }
         
-        // TODO: tratar se algum nao terminou o reduce
         System.out.println("Min list: " + minList);
         System.out.println("Max list: " + maxList);
         int min = minList.stream().min(Integer::compare).get();
@@ -193,7 +166,8 @@ public class Master {
         
         computationTime += System.nanoTime() - tempTime;
         
-        // Group/second map phase
+        // ********** SECOND MAP PHASE **********
+
         futures.clear();
         senders.clear();
 
@@ -219,18 +193,8 @@ public class Master {
 
         computationTime += System.nanoTime() - tempTime;
 
-        boolean allFinishedSecondShuffle = true;
-        for (Sender sender : senders) {
-            Message responseMsg = sender.getResponse();
-            if (!(responseMsg instanceof FinishedPhaseMessage)) { // TODO: corrigir isso
-                allFinishedSecondShuffle = false;
-                break;
-            }
-        }
+        // ********** SECOND SHUFFLE PHASE **********
 
-        // TODO: tratar se algum nao terminou o second shuffle
-
-        // Second Shuffle phase
         futures.clear();
         senders.clear();
 
@@ -251,7 +215,8 @@ public class Master {
 
         communicationTime += System.nanoTime() - tempTime;
 
-        // Second reduce phase
+        // ********** SECOND REDUCE PHASE **********
+
         futures.clear();
         senders.clear();
 
@@ -276,17 +241,6 @@ public class Master {
         }
 
         computationTime += System.nanoTime() - tempTime;
-
-        boolean allFinishedSecondReduce = true;
-        for (Sender sender : senders) {
-            Message responseMsg = sender.getResponse();
-            if (!(responseMsg instanceof FinishedPhaseMessage)) {
-                allFinishedSecondReduce = false;
-                break;
-            }
-        }
-
-        // TODO: tratar se algum nao terminou o second reduce
 
         executor.shutdown();
 
