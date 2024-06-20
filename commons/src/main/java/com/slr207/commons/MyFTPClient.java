@@ -83,38 +83,28 @@ public class MyFTPClient {
     }
 
     // delete shuffled.txt file from the server
-    public void prepareNode(String string) {
+    public void prepareNode(String server) {
         FTPClient ftpClient = new FTPClient();
         try {
-            ftpClient.connect(string, ftpPort);
+            ftpClient.connect(server, ftpPort);
             if (!ftpClient.login(username, password)) {
-                log("FTP login failed for server: " + string);
+                log("FTP login failed for server: " + server);
                 return;
             }
 
             ftpClient.enterLocalPassiveMode();
             ftpClient.setFileType(FTP.BINARY_FILE_TYPE);
 
-            // Check if the file exists on the server
             FTPFile[] files = ftpClient.listFiles();
-            boolean fileExists = false;
-            for (FTPFile file : files) {
-                if (file.getName().equals("shuffled.txt")) {
-                    fileExists = true;
-                    break;
-                }
-            }
 
-            if (fileExists) {
-                ftpClient.deleteFile("shuffled.txt");
+            // Delete all files from the server
+            log("Deleting all files from the server: " + server + ".");
+            for (FTPFile file : files) {
+                ftpClient.deleteFile(file.getName());
                 int errorCode = ftpClient.getReplyCode();
                 if (errorCode != 250) {
                     log("File delete failed. FTP Error code: " + errorCode);
-                } else {
-                    log("File deleted successfully.");
                 }
-            } else {
-                log("File does not exist on the server.");
             }
 
             ftpClient.logout();
