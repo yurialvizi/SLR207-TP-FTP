@@ -18,12 +18,18 @@ import com.slr207.commons.MyFTPClient;
 import com.slr207.commons.ReduceFinishedMessage;
 import com.slr207.commons.ReduceMessage;
 import com.slr207.commons.SecondReduceMessage;
+import com.slr207.commons.SecondShuffleMessage;
 import com.slr207.commons.Sender;
+import com.slr207.commons.ShuffleMessage;
 import com.slr207.commons.StartMessage;
 
 public class Master {
     
     public static void main(String[] args) {
+        long computationTime = 0;
+        long communicationTime = 0;
+        long synchronizationTime = 0;
+
         String nodesFileName = "machines.txt";
         String initialRemoteFileName = "initial-storage.txt";
 
@@ -58,22 +64,52 @@ public class Master {
             myFTPClient.prepareNode(nodes.get(i));
         }
         
+        long tempTime = System.nanoTime();
         for (int i = 0; i < totalNodes; i++) {
             myFTPClient.sendDocuments(initialRemoteFileName, distributedContentList.get(i), nodes.get(i));
         }
-        
-        // Shuffle phase
-        
+
+        communicationTime += System.nanoTime() - tempTime;
+
         List<Future<?>> futures = new ArrayList<>();
         List<Sender> senders = new ArrayList<>();
         
+        // Map phase
+        
+        tempTime = System.nanoTime();
         for (String node : nodes) {
             StartMessage startMessage = new StartMessage(totalNodes, nodes, node);
             Sender sender = new Sender(node, senderPort, startMessage);
             senders.add(sender);
             futures.add(executor.submit(sender));
         }
+        synchronizationTime += System.nanoTime() - tempTime;
 
+        tempTime = System.nanoTime();
+
+        for (Future<?> future : futures) {
+            try {
+                future.get();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+        computationTime += System.nanoTime() - tempTime;
+        
+        // Shuffle phase
+
+        futures.clear();
+        senders.clear();
+        
+        tempTime = System.nanoTime();
+        ShuffleMessage shuffleMessage = new ShuffleMessage();
+        for (String node : nodes) {
+            Sender sender = new Sender(node, senderPort, shuffleMessage);
+            senders.add(sender);
+            futures.add(executor.submit(sender));
+        }
+        
         // Wait for all the threads to finish
         for (Future<?> future : futures) {
             try {
@@ -83,6 +119,8 @@ public class Master {
             }
         }
 
+        communicationTime += System.nanoTime() - tempTime;
+        
         boolean allFinishedShuffle = true;
         for (Sender sender : senders) {
             Message responseMsg = sender.getResponse();
@@ -98,12 +136,17 @@ public class Master {
 
         futures.clear();
         senders.clear();
-
+        
+        tempTime = System.nanoTime();
         for (String node : nodes) {
             Sender sender = new Sender(node, senderPort, new ReduceMessage());
             senders.add(sender);
             futures.add(executor.submit(sender));
-        } 
+        }
+
+        synchronizationTime += System.nanoTime() - tempTime;
+
+        tempTime = System.nanoTime();
 
         // Wait for all the threads to finish
         for (Future<?> future : futures) {
@@ -114,6 +157,7 @@ public class Master {
             }
         }
 
+        
         List<Integer> minList = new ArrayList<>();
         List<Integer> maxList = new ArrayList<>();
         boolean allFinishedReduce = true;
@@ -128,7 +172,7 @@ public class Master {
                 maxList.add(reduceFinishedMessage.getMax());
             }
         }
-
+        
         // TODO: tratar se algum nao terminou o reduce
         System.out.println("Min list: " + minList);
         System.out.println("Max list: " + maxList);
@@ -146,17 +190,23 @@ public class Master {
             group.put("end", end);
             groups.put(nodes.get(i), group);
         }
-
         
-        // Group/second shuffle phase
+        computationTime += System.nanoTime() - tempTime;
+        
+        // Group/second map phase
         futures.clear();
         senders.clear();
 
+        tempTime = System.nanoTime();
         for (String node : nodes) {
             Sender sender = new Sender(node, senderPort, new GroupsMessage(groups));
             senders.add(sender);
             futures.add(executor.submit(sender));
         }
+
+        synchronizationTime += System.nanoTime() - tempTime;
+
+        tempTime = System.nanoTime();
 
         // Wait for all the threads to finish
         for (Future<?> future : futures) {
@@ -166,6 +216,8 @@ public class Master {
                 e.printStackTrace();
             }
         }
+
+        computationTime += System.nanoTime() - tempTime;
 
         boolean allFinishedSecondShuffle = true;
         for (Sender sender : senders) {
@@ -178,15 +230,41 @@ public class Master {
 
         // TODO: tratar se algum nao terminou o second shuffle
 
+        // Second Shuffle phase
+        futures.clear();
+        senders.clear();
+
+        tempTime = System.nanoTime();
+        for (String node : nodes) {
+            Sender sender = new Sender(node, senderPort, new SecondShuffleMessage());
+            senders.add(sender);
+            futures.add(executor.submit(sender));
+        }
+
+        for (Future<?> future : futures) {
+            try {
+                future.get();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+        communicationTime += System.nanoTime() - tempTime;
+
         // Second reduce phase
         futures.clear();
         senders.clear();
 
+        tempTime = System.nanoTime();
         for (String node : nodes) {
             Sender sender = new Sender(node, senderPort, new SecondReduceMessage());
             senders.add(sender);
             futures.add(executor.submit(sender));
         }
+
+        synchronizationTime += System.nanoTime() - tempTime;
+
+        tempTime = System.nanoTime();
 
         // Wait for all the threads to finish
         for (Future<?> future : futures) {
@@ -197,10 +275,12 @@ public class Master {
             }
         }
 
+        computationTime += System.nanoTime() - tempTime;
+
         boolean allFinishedSecondReduce = true;
         for (Sender sender : senders) {
             Message responseMsg = sender.getResponse();
-            if (!(responseMsg instanceof ReduceFinishedMessage)) {
+            if (!(responseMsg instanceof FinishedMessage)) {
                 allFinishedSecondReduce = false;
                 break;
             }
@@ -209,6 +289,10 @@ public class Master {
         // TODO: tratar se algum nao terminou o second reduce
 
         executor.shutdown();
+
+        System.out.println("Computation time: " + computationTime / 1_000_000 + " ms");
+        System.out.println("Communication time: " + communicationTime / 1_000_000 + " ms");
+        System.out.println("Synchronization time: " + synchronizationTime / 1_000_000 + " ms");
     }
 
     private static List<String> readStorageFile(String contentFileName, MyFTPClient myFTPClient, int totalNodes) {

@@ -23,6 +23,8 @@ import com.slr207.commons.Receiver;
 import com.slr207.commons.ReduceFinishedMessage;
 import com.slr207.commons.ReduceMessage;
 import com.slr207.commons.SecondReduceMessage;
+import com.slr207.commons.SecondShuffleMessage;
+import com.slr207.commons.ShuffleMessage;
 import com.slr207.commons.StartMessage;
 
 public class Node {
@@ -53,6 +55,7 @@ public class Node {
             private int totalNodes;
             private List<String> nodeServerList;
             private String myServer;
+            private Map<String, String> secondMap;
 
             @Override
             public void process(Message message, ObjectOutputStream out) {
@@ -69,6 +72,44 @@ public class Node {
                     System.out.println("My own IP address: " + myServer);
                     
                     Map<String, Integer> mappedContent = map();
+                    System.out.println("Mapped content: " + mappedContent);
+
+                    try (BufferedWriter writer = new BufferedWriter(new FileWriter("toto/mapped.txt"))) {
+                        writer.write(mapToString(mappedContent));
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    } 
+
+                    try {
+                        out.writeObject(new FinishedMessage(FinishedPhase.FIRST_MAP));
+                    } catch (IOException e) {
+                        // TODO Auto-generated catch block
+                        e.printStackTrace();
+                    }
+                } else if (message instanceof ShuffleMessage) {
+                    System.out.println("Received a ShuffleMessage from the master.");
+                    Map<String, Integer> mappedContent = new HashMap<>();
+
+                    try (BufferedReader reader = new BufferedReader(new FileReader("toto/mapped.txt"))) {
+                        StringBuilder contentBuilder = new StringBuilder();
+                        String line;
+                        while ((line = reader.readLine()) != null) {
+                            contentBuilder.append(line).append("\n");
+                        }
+                        for (String keyValuePair : contentBuilder.toString().split("\n")) {
+                            String[] parts = keyValuePair.split(":");
+                            if (parts.length == 2) {
+                                String key = parts[0].trim();
+                                Integer value = Integer.parseInt(parts[1].trim());
+                                mappedContent.put(key, value);
+                            } else {
+                                System.out.println("Invalid line: " + keyValuePair);
+                            }
+                        }
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+
                     List<Map<String, Integer>> contentToBeSentList = distributeMap(mappedContent);
                     for (int i = 0; i < totalNodes; i++) {
                         String content = mapToString(contentToBeSentList.get(i));
@@ -130,7 +171,19 @@ public class Node {
                         reducedContent = "";
                     }
 
-                    sendContentToGroups(groups, reducedContent);
+                    secondMap = secondMap(groups, reducedContent);
+                
+                    try {
+                        out.writeObject(new FinishedMessage(FinishedPhase.SECOND_MAP));
+                    } catch (IOException e) {
+                        // TODO Auto-generated catch block
+                        e.printStackTrace();
+                    }
+                } else if (message instanceof SecondShuffleMessage) {
+                    System.out.println("Received a SecondShuffleMessage from the master.");
+                    sendContentToGroups();
+
+                    secondMap.clear();
 
                     try {
                         out.writeObject(new FinishedMessage(FinishedPhase.SECOND_SHUFFLE));
@@ -140,8 +193,54 @@ public class Node {
                     }
                 } else if (message instanceof SecondReduceMessage) {
                     System.out.println("Received a SecondReduceMessage from the master.");
+
+                    Map<String, Integer> groupedMap = new HashMap<>();
+
+                    // Read all grouped files and merge them into a single map
+                    for (int i = 0; i < totalNodes; i++) {
+                        String contentFileName = "toto/grouped_" + nodeServerList.get(i) + ".txt";
+
+                        try (BufferedReader reader = new BufferedReader(new FileReader(contentFileName))) {
+                            String line;
+                            while ((line = reader.readLine()) != null) {
+                                String[] parts = line.split(":");
+                                if (parts.length == 2) {
+                                    String key = parts[0].trim();
+                                    Integer value = Integer.parseInt(parts[1].trim());
+                                    groupedMap.put(key, groupedMap.getOrDefault(key, 0) + value);
+                                } else {
+                                    System.out.println("Invalid line: " + line);
+                                }
+                            }
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    }
+
+                    System.out.println("Grouped map: " + groupedMap);
+
+                    // Sort map by value and then by key
+                    List<Map.Entry<String, Integer>> sortedMapList = new ArrayList<>(groupedMap.entrySet());
+                    sortedMapList.sort((a, b) -> {
+                        int valueComparison = b.getValue().compareTo(a.getValue());
+                        return valueComparison == 0 ? a.getKey().compareTo(b.getKey()) : valueComparison;
+                    });
+
+                    // Parse the sorted map to a string
+                    String sortedMapString = "";
+                    for (Map.Entry<String, Integer> entry : sortedMapList) {
+                        sortedMapString += entry.getKey() + ":" + entry.getValue() + "\n";
+                    }
+
+                    // Write the grouped map to a local file
+                    try (BufferedWriter writer = new BufferedWriter(new FileWriter("toto/grouped.txt"))) {
+                        writer.write(sortedMapString);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }  
+
                     try {
-                        out.writeObject(new ReduceFinishedMessage(0, 5));
+                        out.writeObject(new FinishedMessage(FinishedPhase.SECOND_REDUCE));
                     } catch (IOException e) {
                         // TODO Auto-generated catch block
                         e.printStackTrace();
@@ -233,8 +332,8 @@ public class Node {
                 return map.values().stream().max(Integer::compare).orElse(0);
             }
         
-            private void sendContentToGroups(Map<String, Map<String, Integer>> groups, String reducedContent) {
-                System.out.println("Reduced content: " + reducedContent);
+            private Map<String, String> secondMap(Map<String, Map<String, Integer>> groups, String reducedContent) {
+                Map<String, String> secondMap = new HashMap<>();
                 for (String node : groups.keySet()) {
                     Map<String, Integer> group = groups.get(node);
                     int start = group.get("start");
@@ -250,11 +349,14 @@ public class Node {
                             }
                         }
                     }
-                    String content = contentBuilder.toString();
-
-                    System.out.println("Sending content to " + node + ": " + content);
-
-                    myFTPClient.sendDocuments("grouped_" + myServer + ".txt", content, node);
+                    secondMap.put(node, contentBuilder.toString());
+                }
+                return secondMap;
+            }
+            
+            private void sendContentToGroups() {
+                for (String node : secondMap.keySet()) {
+                    myFTPClient.sendDocuments("grouped_" + myServer + ".txt", secondMap.get(node), node);
                 }
             }
         };
