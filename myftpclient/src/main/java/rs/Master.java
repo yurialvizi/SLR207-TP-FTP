@@ -36,7 +36,7 @@ public class Master {
         }
 
         int totalNodes = nodes.size();
-        String storageFileName = "storage.csv";
+        String storageFileName = "/cal/commoncrawl/CC-MAIN-20230320083513-20230320113513-00019.warc.wet";
 
         ExecutorService executor = Executors.newFixedThreadPool(totalNodes);
     
@@ -250,17 +250,18 @@ public class Master {
     }
 
     private static List<String> readStorageFile(String contentFileName, MyFTPClient myFTPClient, int totalNodes) {
-        List<String> readContent = new ArrayList<>();
+        List<String> contentRead = new ArrayList<>();
         try (BufferedReader br = new BufferedReader(new FileReader(contentFileName))) {
             String line;
             while ((line = br.readLine()) != null) {
-                readContent.add(line);
+                line = line.replaceAll("[^a-zA-Z0-9\\s]", "");
+                contentRead.add(line);
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
         
-        return readContent;
+        return contentRead;
     }
 
     private static List<String> distributeContentLines(List<String> content, int totalNodes) {

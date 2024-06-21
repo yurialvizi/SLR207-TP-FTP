@@ -248,7 +248,7 @@ public class Node {
                 try (BufferedReader reader = new BufferedReader(new FileReader(initialStorageFilePath))) {
                     String line;
                     while ((line = reader.readLine()) != null) {
-                        String[] words = line.split(",");
+                        String[] words = line.split("\\s+");
                         for (String word : words) {
                             word = word.trim();
                             if (!word.isEmpty()) {
