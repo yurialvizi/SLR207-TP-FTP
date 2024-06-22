@@ -3,6 +3,8 @@ package rs;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -22,20 +24,20 @@ public class Master {
         long communicationTime = 0;
         long synchronizationTime = 0;
 
-        String nodesFileName = "machines.txt";
+        String nodesFileName = "/machines.txt";
         String initialRemoteFileName = "initial-storage.txt";
 
-        List<String> nodes = new ArrayList<>();
-        try (BufferedReader br = new BufferedReader(new FileReader(nodesFileName))) {
-            String line;
-            while ((line = br.readLine()) != null) {
-                nodes.add(line);
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
+        int totalNodes = 3;
+
+        List<String> nodes = readMachinesFromResource(nodesFileName, totalNodes);
+
+        if (nodes.size() < totalNodes) {
+            System.out.println("Not enough available nodes in the file");
+            return;
         }
 
-        int totalNodes = nodes.size();
+        System.out.println("Nodes: " + nodes);
+
         String storageFileName = "/cal/commoncrawl/CC-MAIN-20230320083513-20230320113513-00019.warc.wet";
 
         ExecutorService executor = Executors.newFixedThreadPool(totalNodes);
@@ -247,6 +249,20 @@ public class Master {
         System.out.println("Computation time: " + computationTime / 1_000_000 + " ms");
         System.out.println("Communication time: " + communicationTime / 1_000_000 + " ms");
         System.out.println("Synchronization time: " + synchronizationTime / 1_000_000 + " ms");
+    }
+
+    public static List<String> readMachinesFromResource(String resourcePath, int totalNodes) {
+        List<String> machines = new ArrayList<>();
+        try (InputStream inputStream = MyFTPClient.class.getResourceAsStream(resourcePath);
+             BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))) {
+            String line;
+            while ((line = reader.readLine()) != null && machines.size() < totalNodes) {
+                machines.add(line);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return machines;
     }
 
     private static List<String> readStorageFile(String contentFileName, MyFTPClient myFTPClient, int totalNodes) {
