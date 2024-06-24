@@ -208,8 +208,6 @@ public class Node {
                         }
                     }
 
-                    System.out.println("Grouped map: " + groupedMap);
-
                     // Sort map by value and then by key
                     List<Map.Entry<String, Integer>> sortedMapList = new ArrayList<>(groupedMap.entrySet());
                     sortedMapList.sort((a, b) -> {
@@ -218,10 +216,14 @@ public class Node {
                     });
 
                     // Parse the sorted map to a string
-                    String sortedMapString = "";
+                    StringBuilder sortedMapStringBuilder = new StringBuilder();
                     for (Map.Entry<String, Integer> entry : sortedMapList) {
-                        sortedMapString += entry.getKey() + ":" + entry.getValue() + "\n";
+                        sortedMapStringBuilder.append(entry.getKey())
+                                            .append(":")
+                                            .append(entry.getValue())
+                                            .append("\n");
                     }
+                    String sortedMapString = sortedMapStringBuilder.toString();
 
                     // Write the grouped map to a local file
                     try (BufferedWriter writer = new BufferedWriter(new FileWriter("toto/grouped.txt"))) {
@@ -232,6 +234,7 @@ public class Node {
 
                     try {
                         out.writeObject(new SecondReduceFinishedMessage());
+                        System.out.println("SecondReduceFinishedMessage sent to the master.");
                     } catch (IOException e) {
                         // TODO Auto-generated catch block
                         e.printStackTrace();
