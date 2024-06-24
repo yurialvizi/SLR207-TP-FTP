@@ -17,6 +17,8 @@ import org.apache.ftpserver.usermanager.impl.BaseUser;
 import org.apache.ftpserver.usermanager.impl.WritePermission;
 import org.apache.log4j.PropertyConfigurator;
 
+import com.slr207.commons.Logger;
+
 public class MyFTPServer {
     private int port;
     private FtpServerFactory serverFactory;
@@ -41,12 +43,12 @@ public class MyFTPServer {
         if (!userFile.exists()) {
             try {
                 if (userFile.createNewFile()) {
-                    System.out.println("File created: " + userFile.getName());
+                    Logger.log("File created: " + userFile.getName());
                 } else {
-                    System.out.println("File already exists.");
+                    Logger.log("File already exists.");
                 }
             } catch (IOException e) {
-                System.out.println("An error occurred.");
+                Logger.log("An error occurred.");
                 e.printStackTrace();
             }
         }
@@ -63,9 +65,9 @@ public class MyFTPServer {
         File directory = new File(homeDirectory); // Convert the string to a File object
         if (!directory.exists()) { // Check if the directory exists
             if (directory.mkdirs()) {
-                System.out.println("Directory created: " + directory.getAbsolutePath());
+                Logger.log("Directory created: " + directory.getAbsolutePath());
             } else {
-                System.out.println("Failed to create directory.");
+                Logger.log("Failed to create directory.");
             }
         }
         user.setHomeDirectory(homeDirectory);

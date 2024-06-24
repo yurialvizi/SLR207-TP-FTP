@@ -8,8 +8,6 @@ import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.text.SimpleDateFormat;
-import java.util.Date;
 
 public class MyFTPClient {
     String username;
@@ -22,21 +20,12 @@ public class MyFTPClient {
         this.ftpPort = ftpPort;
     }
 
-    private String getCurrentTimestamp() {
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss,SSS");
-        return sdf.format(new Date());
-    }
-
-    private void log(String message) {
-        System.out.println(getCurrentTimestamp() + " " + message);
-    }
-
     public void sendDocuments(String fileName, String content, String server) {
         FTPClient ftpClient = new FTPClient();
         try {
             ftpClient.connect(server, ftpPort);
             if (!ftpClient.login(username, password)) {
-                log("FTP login failed for server: " + server);
+                Logger.log("FTP login failed for server: " + server);
                 return;
             }
 
@@ -58,9 +47,9 @@ public class MyFTPClient {
                 ftpClient.storeFile(fileName, inputStream);
                 int errorCode = ftpClient.getReplyCode();
                 if (errorCode != 226) {
-                    log("File upload failed. FTP Error code: " + errorCode);
+                    Logger.log("File upload failed. FTP Error code: " + errorCode);
                 } else {
-                    log("File " + fileName + " uploaded successfully to the server " + server + ".");
+                    Logger.log("File " + fileName + " uploaded successfully to the server " + server + ".");
                 }
             } else {
                 // Code to retrieve and display file content
@@ -68,7 +57,7 @@ public class MyFTPClient {
                 BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
                 String line;
                 while ((line = reader.readLine()) != null) {
-                    log(line);
+                    Logger.log(line);
                 }
                 reader.close();
                 ftpClient.completePendingCommand();
@@ -88,7 +77,7 @@ public class MyFTPClient {
         try {
             ftpClient.connect(server, ftpPort);
             if (!ftpClient.login(username, password)) {
-                log("FTP login failed for server: " + server);
+                Logger.log("FTP login failed for server: " + server);
                 return;
             }
 
@@ -98,12 +87,12 @@ public class MyFTPClient {
             FTPFile[] files = ftpClient.listFiles();
 
             // Delete all files from the server
-            log("Deleting all files from the server: " + server + ".");
+            Logger.log("Deleting all files from the server: " + server + ".");
             for (FTPFile file : files) {
                 ftpClient.deleteFile(file.getName());
                 int errorCode = ftpClient.getReplyCode();
                 if (errorCode != 250) {
-                    log("File delete failed. FTP Error code: " + errorCode);
+                    Logger.log("File delete failed. FTP Error code: " + errorCode);
                 }
             }
 

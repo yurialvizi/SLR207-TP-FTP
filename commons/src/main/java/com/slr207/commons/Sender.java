@@ -27,12 +27,12 @@ public class Sender implements Runnable {
              ObjectInputStream in = new ObjectInputStream(socket.getInputStream())) {
             
             out.writeObject(message);
-            System.out.println("Message sent to: " + host + " on port: " + port + " of type: " + message.getClass().getName());
+            Logger.log("Message sent to: " + host + " on port: " + port + " of type: " + message.getType().getDisplayName());
 
             response = (Message) in.readObject();
-            System.out.println("Response received from: " + host + " of type: " + response.getClass().getName());
+            Logger.log("Response received from: " + host + " of type: " + response.getType().getDisplayName());
         } catch (IOException | ClassNotFoundException e) {
-            System.out.println("Error while sending message to the host: " + host + " with error message: " + e.getMessage());
+            Logger.log("Error while sending message to the host: " + host + " with error message: " + e.getMessage());
             e.printStackTrace();
         }
 

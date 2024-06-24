@@ -14,6 +14,7 @@ import java.util.Map;
 import org.apache.ftpserver.FtpServer;
 
 import com.slr207.commons.messages.*;
+import com.slr207.commons.Logger;
 import com.slr207.commons.MessageProcessor;
 import com.slr207.commons.MyFTPClient;
 import com.slr207.commons.Receiver;
@@ -50,20 +51,19 @@ public class Node {
 
             @Override
             public void process(Message message, ObjectOutputStream out) {
+                printReceivedMessage(message.getType());
                 if (message instanceof StartMessage) {
-                    System.out.println("Received a StartMessage from the master.");
                     StartMessage startMessage = (StartMessage) message;
                     
                     totalNodes = startMessage.getTotalNodes();
                     nodeServerList = startMessage.getNodeServerList();
                     myServer = startMessage.getYourOwnServer();
                     
-                    System.out.println("Total number of nodes: " + totalNodes);
-                    System.out.println("IP addresses of all nodes: " + nodeServerList);
-                    System.out.println("My own IP address: " + myServer);
+                    Logger.log("Total number of nodes: " + totalNodes);
+                    Logger.log("IP addresses of all nodes: " + nodeServerList);
+                    Logger.log("My own IP address: " + myServer);
                     
                     Map<String, Integer> mappedContent = map();
-                    System.out.println("Mapped content: " + mappedContent);
 
                     try (BufferedWriter writer = new BufferedWriter(new FileWriter("toto/mapped.txt"))) {
                         writer.write(mapToString(mappedContent));
@@ -71,14 +71,8 @@ public class Node {
                         e.printStackTrace();
                     } 
 
-                    try {
-                        out.writeObject(new FirstShuffleFinishedMessage());
-                    } catch (IOException e) {
-                        // TODO Auto-generated catch block
-                        e.printStackTrace();
-                    }
+                    sendResponse(out, new FirstShuffleFinishedMessage());
                 } else if (message instanceof FirstShuffleMessage) {
-                    System.out.println("Received a ShuffleMessage from the master.");
                     Map<String, Integer> mappedContent = new HashMap<>();
 
                     try (BufferedReader reader = new BufferedReader(new FileReader("toto/mapped.txt"))) {
@@ -94,7 +88,7 @@ public class Node {
                                 Integer value = Integer.parseInt(parts[1].trim());
                                 mappedContent.put(key, value);
                             } else {
-                                System.out.println("Invalid line: " + keyValuePair);
+                                Logger.log("Invalid line: " + keyValuePair);
                             }
                         }
                     } catch (IOException e) {
@@ -104,22 +98,12 @@ public class Node {
                     List<Map<String, Integer>> contentToBeSentList = distributeMap(mappedContent);
                     for (int i = 0; i < totalNodes; i++) {
                         String content = mapToString(contentToBeSentList.get(i));
-                        System.out.println("Map " + i + ": " + content);
                         myFTPClient.sendDocuments("shuffled_"+ myServer +".txt", content, nodeServerList.get(i));
                     }
 
-                    try {
-                        out.writeObject(new FirstShuffleFinishedMessage());
-                    } catch (IOException e) {
-                        // TODO Auto-generated catch block
-                        e.printStackTrace();
-                    }
+                    sendResponse(out, new FirstShuffleFinishedMessage());
                 } else if (message instanceof FirstReduceMessage) {
-                    System.out.println("Received a ReduceMessage from the master.");
-
                     Map<String, Integer> reducedMap = reduce();
-
-                    System.out.println("Reduced map: " + reducedMap);
 
                     String reducedMapString = mapToString(reducedMap);
 
@@ -133,20 +117,13 @@ public class Node {
                     int minValue = getMinValue(reducedMap);
                     int maxValue = getMaxValue(reducedMap);
 
-                    System.out.println("Min value: " + minValue);
-                    System.out.println("Max value: " + maxValue);
+                    Logger.log("Min value: " + minValue);
+                    Logger.log("Max value: " + maxValue);
 
-                    try {
-                        out.writeObject(new FirstReduceFinishedMessage(minValue, maxValue));
-                    } catch (IOException e) {
-                        // TODO Auto-generated catch block
-                        e.printStackTrace();
-                    }
+                    sendResponse(out, new FirstReduceFinishedMessage(minValue, maxValue));
                 } else if (message instanceof GroupsMessage) {
-                    System.out.println("Received a GroupsMessage from the master.");
                     GroupsMessage groupsMessage = (GroupsMessage) message;
                     Map<String, Map<String, Integer>> groups = groupsMessage.getGroups();
-                    System.out.println("Groups: " + groups);
 
                     String reducedContent;
 
@@ -163,28 +140,16 @@ public class Node {
                     }
 
                     secondMap = secondMap(groups, reducedContent);
-                
-                    try {
-                        out.writeObject(new SecondMapFinishedMessage());
-                    } catch (IOException e) {
-                        // TODO Auto-generated catch block
-                        e.printStackTrace();
-                    }
+
+                    sendResponse(out, new SecondMapFinishedMessage());
                 } else if (message instanceof SecondShuffleMessage) {
-                    System.out.println("Received a SecondShuffleMessage from the master.");
                     sendContentToGroups();
 
                     secondMap.clear();
 
-                    try {
-                        out.writeObject(new SecondShuffleFinishedMessage());
-                    } catch (IOException e) {
-                        // TODO Auto-generated catch block
-                        e.printStackTrace();
-                    }
-                } else if (message instanceof SecondReduceMessage) {
-                    System.out.println("Received a SecondReduceMessage from the master.");
+                    sendResponse(out, new SecondShuffleFinishedMessage());
 
+                } else if (message instanceof SecondReduceMessage) {
                     Map<String, Integer> groupedMap = new HashMap<>();
 
                     // Read all grouped files and merge them into a single map
@@ -200,7 +165,7 @@ public class Node {
                                     Integer value = Integer.parseInt(parts[1].trim());
                                     groupedMap.put(key, groupedMap.getOrDefault(key, 0) + value);
                                 } else {
-                                    System.out.println("Invalid line: " + line);
+                                    Logger.log("Invalid line: " + line);
                                 }
                             }
                         } catch (IOException e) {
@@ -230,18 +195,12 @@ public class Node {
                         writer.write(sortedMapString);
                     } catch (IOException e) {
                         e.printStackTrace();
-                    }  
-
-                    try {
-                        out.writeObject(new SecondReduceFinishedMessage());
-                        System.out.println("SecondReduceFinishedMessage sent to the master.");
-                    } catch (IOException e) {
-                        // TODO Auto-generated catch block
-                        e.printStackTrace();
                     }
+
+                    sendResponse(out, new SecondReduceFinishedMessage());
                 } else {
-                    System.out.println("Received a message from the master.");
-                    System.out.println("Message: " + message);
+                    Logger.log("Received a message from the master.");
+                    Logger.log("Message: " + message);
                 }
             }
 
@@ -306,7 +265,7 @@ public class Node {
                                 Integer value = Integer.parseInt(parts[1].trim());
                                 reducedMap.put(key, reducedMap.getOrDefault(key, 0) + value);
                             } else {
-                                System.out.println("Invalid line: " + line);
+                                Logger.log("Invalid line: " + line);
                             }
                         }
                     } catch (IOException e) {
@@ -351,6 +310,20 @@ public class Node {
             private void sendContentToGroups() {
                 for (String node : secondMap.keySet()) {
                     myFTPClient.sendDocuments("grouped_" + myServer + ".txt", secondMap.get(node), node);
+                }
+            }
+
+            private void printReceivedMessage(MessageType messageType) {
+                Logger.log("Received a " + messageType.getDisplayName() + " message from the master.");
+            }
+
+            private void sendResponse(ObjectOutputStream out, Message message) {
+                try {
+                    out.writeObject(message);
+                    Logger.log("Sent a " + message.getType().getDisplayName() + " message to the master.");
+                } catch (IOException e) {
+                    // TODO Auto-generated catch block
+                    e.printStackTrace();
                 }
             }
         };

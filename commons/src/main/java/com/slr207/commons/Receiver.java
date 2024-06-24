@@ -17,12 +17,12 @@ public class Receiver implements Runnable {
     public Receiver(int port, MessageProcessor processor) throws IOException {
         serverSocket = new ServerSocket(port);
         this.messageProcessor = processor;
-        System.out.println("Receiver initialized on port " + port);
+        Logger.log("Receiver initialized on port " + port);
     }
 
     @Override
     public void run() {
-        System.out.println("Receiver is running");
+        Logger.log("Receiver is running");
         try {
             while (!Thread.currentThread().isInterrupted()) {
                 try (Socket clientSocket = serverSocket.accept();
@@ -34,9 +34,9 @@ public class Receiver implements Runnable {
                         messageProcessor.process(message, out);
                     }
                 } catch (ClassNotFoundException e) {
-                    System.out.println("Class not found: " + e.getMessage());
+                    Logger.log("Class not found: " + e.getMessage());
                 } catch (IOException e) {
-                    System.out.println("IO Error: " + e.getMessage());
+                    Logger.log("IO Error: " + e.getMessage());
                     if (Thread.currentThread().isInterrupted()) {
                         break;
                     }
@@ -46,7 +46,7 @@ public class Receiver implements Runnable {
             try {
                 serverSocket.close();
             } catch (IOException e) {
-                System.out.println("Error closing server socket: " + e.getMessage());
+                Logger.log("Error closing server socket: " + e.getMessage());
             }
         }
     }
