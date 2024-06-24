@@ -50,18 +50,21 @@ public class Master {
 
         MyFTPClient myFTPClient = new MyFTPClient(ftpPort, username, password);
 
-        List<String> readContent = readStorageFile(storageFileName, myFTPClient, totalNodes);
-
-        List<String> distributedContentList = distributeContentLines(readContent, totalNodes);
+        System.out.println("Reading storage file");
+        List<String> distributedContentList = readStorageFile(storageFileName, myFTPClient, totalNodes);
 
         for (int i = 0; i < totalNodes; i++) {
             myFTPClient.prepareNode(nodes.get(i));
         }
-        
+
+        System.out.println("Nodes prepared");
+
         long tempTime = System.nanoTime();
         for (int i = 0; i < totalNodes; i++) {
             myFTPClient.sendDocuments(initialRemoteFileName, distributedContentList.get(i), nodes.get(i));
         }
+
+        System.out.println("Initial storage sent to nodes");
 
         communicationTime += System.nanoTime() - tempTime;
 
@@ -266,32 +269,30 @@ public class Master {
     }
 
     private static List<String> readStorageFile(String contentFileName, MyFTPClient myFTPClient, int totalNodes) {
-        List<String> contentRead = new ArrayList<>();
+        List<StringBuilder> contentBuilders = new ArrayList<>(totalNodes);
+
+        for (int i = 0; i < totalNodes; i++) {
+            contentBuilders.add(new StringBuilder());
+        }
+
         try (BufferedReader br = new BufferedReader(new FileReader(contentFileName))) {
             String line;
-            while ((line = br.readLine()) != null) {
+            for (int i = 0; (line = br.readLine()) != null; i++) {
                 line = line.replaceAll("[^a-zA-Z0-9\\s]", "");
-                contentRead.add(line);
+                if (line.trim().isEmpty()) {
+                    continue;
+                }
+                contentBuilders.get(i % totalNodes).append(line).append("\n");
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
+
+        List<String> contentList = new ArrayList<>(totalNodes);
+        for (StringBuilder builder : contentBuilders) {
+            contentList.add(builder.toString());
+        }
         
-        return contentRead;
-    }
-
-    private static List<String> distributeContentLines(List<String> content, int totalNodes) {
-        List<String> contentList = new ArrayList<>();
-        for (int i = 0; i < totalNodes; i++) {
-            contentList.add(new String());
-        }
-
-        // Distribute content lines separated by a newline character to each node 
-        for (int i = 0; i < content.size(); i++) {
-            contentList.set(i % totalNodes, contentList.get(i % totalNodes) + content.get(i) + "\n");
-        }
-
         return contentList;
     }
-    
 }
