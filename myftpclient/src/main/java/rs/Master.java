@@ -13,6 +13,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
+import com.slr207.commons.Logger;
 import com.slr207.commons.MyFTPClient;
 import com.slr207.commons.Sender;
 import com.slr207.commons.messages.*;
@@ -27,16 +28,16 @@ public class Master {
         String nodesFileName = "/machines.txt";
         String initialRemoteFileName = "initial-storage.txt";
 
-        int totalNodes = 3;
+        int totalNodes = args.length > 0 ? Integer.parseInt(args[0]) : 3;
 
         List<String> nodes = readMachinesFromResource(nodesFileName, totalNodes);
 
         if (nodes.size() < totalNodes) {
-            System.out.println("Not enough available nodes in the file");
+            Logger.log("Not enough available nodes in the file");
             return;
         }
 
-        System.out.println("Nodes: " + nodes);
+        Logger.log("Nodes: " + nodes);
 
         String storageFileName = "/cal/commoncrawl/CC-MAIN-20230320083513-20230320113513-00019.warc.wet";
 
@@ -50,21 +51,21 @@ public class Master {
 
         MyFTPClient myFTPClient = new MyFTPClient(ftpPort, username, password);
 
-        System.out.println("Reading storage file");
+        Logger.log("Reading storage file");
         List<String> distributedContentList = readStorageFile(storageFileName, myFTPClient, totalNodes);
 
         for (int i = 0; i < totalNodes; i++) {
             myFTPClient.prepareNode(nodes.get(i));
         }
 
-        System.out.println("Nodes prepared");
+        Logger.log("Nodes prepared");
 
         long tempTime = System.nanoTime();
         for (int i = 0; i < totalNodes; i++) {
             myFTPClient.sendDocuments(initialRemoteFileName, distributedContentList.get(i), nodes.get(i));
         }
 
-        System.out.println("Initial storage sent to nodes");
+        Logger.log("Initial storage sent to nodes");
 
         communicationTime += System.nanoTime() - tempTime;
 
@@ -152,11 +153,11 @@ public class Master {
             maxList.add(reduceFinishedMessage.getMax());
         }
         
-        System.out.println("Min list: " + minList);
-        System.out.println("Max list: " + maxList);
+        Logger.log("Min list: " + minList);
+        Logger.log("Max list: " + maxList);
         int min = minList.stream().min(Integer::compare).get();
         int max = maxList.stream().max(Integer::compare).get();
-        System.out.println("Min: " + min + " Max: " + max);
+        Logger.log("Min: " + min + " Max: " + max);
         int groupSize = (int) Math.ceil((double) (max - min + 1) / totalNodes);
         Map<String, Map<String, Integer>> groups = new HashMap<>();
         
@@ -249,9 +250,9 @@ public class Master {
 
         executor.shutdown();
 
-        System.out.println("Computation time: " + computationTime / 1_000_000 + " ms");
-        System.out.println("Communication time: " + communicationTime / 1_000_000 + " ms");
-        System.out.println("Synchronization time: " + synchronizationTime / 1_000_000 + " ms");
+        Logger.log("Computation time: " + computationTime / 1_000_000 + " ms");
+        Logger.log("Communication time: " + communicationTime / 1_000_000 + " ms");
+        Logger.log("Synchronization time: " + synchronizationTime / 1_000_000 + " ms");
     }
 
     public static List<String> readMachinesFromResource(String resourcePath, int totalNodes) {
