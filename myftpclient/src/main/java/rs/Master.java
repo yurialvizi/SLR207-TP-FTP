@@ -1,7 +1,10 @@
 package rs;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -250,9 +253,30 @@ public class Master {
 
         executor.shutdown();
 
-        Logger.log("Computation time: " + computationTime / 1_000_000 + " ms");
-        Logger.log("Communication time: " + communicationTime / 1_000_000 + " ms");
-        Logger.log("Synchronization time: " + synchronizationTime / 1_000_000 + " ms");
+        writeMetrics(totalNodes, computationTime, communicationTime, synchronizationTime);
+    }
+
+    private static void writeMetrics(int totalNodes, long computationTime, long communicationTime,
+            long synchronizationTime) {
+        String filename = "/dev/shm/ydesene-23/metrics/metrics.csv";
+
+        boolean fileExists = new File(filename).exists();
+
+        Logger.log("Writing metrics to file: " + filename);
+
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(filename, true))) {
+            if (!fileExists) {
+                writer.write("Number of Nodes,Computation Time (ms),Communication Time (ms),Synchronization Time (ms)");
+                writer.newLine();
+            }
+            writer.write(totalNodes + "," 
+                        + computationTime / 1_000_000 + "," 
+                        + communicationTime / 1_000_000 + "," 
+                        + synchronizationTime / 1_000_000);
+            writer.newLine();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     public static List<String> readMachinesFromResource(String resourcePath, int totalNodes) {
@@ -260,12 +284,13 @@ public class Master {
         try (InputStream inputStream = MyFTPClient.class.getResourceAsStream(resourcePath);
              BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))) {
             String line;
-            while ((line = reader.readLine()) != null && machines.size() < totalNodes) {
+            while ((line = reader.readLine()) != null && machines.size() <= totalNodes) {
                 machines.add(line);
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
+        machines.remove(0); // Remove the first line (master node)
         return machines;
     }
 
