@@ -24,7 +24,7 @@ public class Node {
         int ftpPort = 2505;
         int receiverPort = 5524;
 
-        String initialStorageFilePath = "toto/initial-storage.txt";
+        String absPath = "/dev/shm/ydesene-23/toto/";
 
         MyFTPServer myFTPServer = new MyFTPServer(ftpPort);
         MyFTPClient myFTPClient = new MyFTPClient(ftpPort, "toto", "tata");
@@ -32,7 +32,7 @@ public class Node {
         FtpServer ftpServer = myFTPServer.createServer();
         
         try {
-            Receiver receiver = new Receiver(receiverPort, createMessageProcessor(myFTPClient, initialStorageFilePath));
+            Receiver receiver = new Receiver(receiverPort, createMessageProcessor(myFTPClient, absPath));
             Thread receiverThread = new Thread(receiver);
             receiverThread.start();
             ftpServer.start();
@@ -42,7 +42,7 @@ public class Node {
         }
     }
 
-    public static MessageProcessor createMessageProcessor(MyFTPClient myFTPClient, String initialStorageFilePath) {
+    public static MessageProcessor createMessageProcessor(MyFTPClient myFTPClient, String absPath) {
        return new MessageProcessor() {
             private int totalNodes;
             private List<String> nodeServerList;
@@ -65,7 +65,7 @@ public class Node {
                     
                     Map<String, Integer> mappedContent = map();
 
-                    try (BufferedWriter writer = new BufferedWriter(new FileWriter("toto/mapped.txt"))) {
+                    try (BufferedWriter writer = new BufferedWriter(new FileWriter(absPath + "mapped.txt"))) {
                         writer.write(mapToString(mappedContent));
                     } catch (IOException e) {
                         e.printStackTrace();
@@ -75,7 +75,7 @@ public class Node {
                 } else if (message instanceof FirstShuffleMessage) {
                     Map<String, Integer> mappedContent = new HashMap<>();
 
-                    try (BufferedReader reader = new BufferedReader(new FileReader("toto/mapped.txt"))) {
+                    try (BufferedReader reader = new BufferedReader(new FileReader(absPath + "mapped.txt"))) {
                         StringBuilder contentBuilder = new StringBuilder();
                         String line;
                         while ((line = reader.readLine()) != null) {
@@ -93,6 +93,8 @@ public class Node {
                         }
                     } catch (IOException e) {
                         e.printStackTrace();
+                        System.out.println("Error reading mapped.txt");
+                        System.exit(1);
                     }
 
                     List<Map<String, Integer>> contentToBeSentList = distributeMap(mappedContent);
@@ -108,7 +110,7 @@ public class Node {
                     String reducedMapString = mapToString(reducedMap);
 
                     // Write the reduced map to a local file
-                    try (BufferedWriter writer = new BufferedWriter(new FileWriter("toto/reduced.txt"))) {
+                    try (BufferedWriter writer = new BufferedWriter(new FileWriter(absPath + "reduced.txt"))) {
                         writer.write(reducedMapString);
                     } catch (IOException e) {
                         e.printStackTrace();
@@ -127,7 +129,7 @@ public class Node {
 
                     String reducedContent;
 
-                    try (BufferedReader reader = new BufferedReader(new FileReader("toto/reduced.txt"))) {
+                    try (BufferedReader reader = new BufferedReader(new FileReader(absPath + "reduced.txt"))) {
                         StringBuilder contentBuilder = new StringBuilder();
                         String line;
                         while ((line = reader.readLine()) != null) {
@@ -154,7 +156,7 @@ public class Node {
 
                     // Read all grouped files and merge them into a single map
                     for (int i = 0; i < totalNodes; i++) {
-                        String contentFileName = "toto/grouped_" + nodeServerList.get(i) + ".txt";
+                        String contentFileName = absPath + "grouped_" + nodeServerList.get(i) + ".txt";
 
                         try (BufferedReader reader = new BufferedReader(new FileReader(contentFileName))) {
                             String line;
@@ -191,7 +193,7 @@ public class Node {
                     String sortedMapString = sortedMapStringBuilder.toString();
 
                     // Write the grouped map to a local file
-                    try (BufferedWriter writer = new BufferedWriter(new FileWriter("toto/grouped.txt"))) {
+                    try (BufferedWriter writer = new BufferedWriter(new FileWriter(absPath + "grouped.txt"))) {
                         writer.write(sortedMapString);
                     } catch (IOException e) {
                         e.printStackTrace();
@@ -207,7 +209,7 @@ public class Node {
             private Map<String, Integer> map() {
                 Map<String, Integer> wordCount = new HashMap<>();
         
-                try (BufferedReader reader = new BufferedReader(new FileReader(initialStorageFilePath))) {
+                try (BufferedReader reader = new BufferedReader(new FileReader(absPath + "initial-storage.txt"))) {
                     String line;
                     while ((line = reader.readLine()) != null) {
                         String[] words = line.split("\\s+");
@@ -254,7 +256,7 @@ public class Node {
                 Map<String, Integer> reducedMap = new HashMap<>();
                 
                 for (int i = 0; i < totalNodes; i++) {
-                    String contentFileName = "toto/shuffled_" + nodeServerList.get(i) + ".txt";
+                    String contentFileName = absPath + "shuffled_" + nodeServerList.get(i) + ".txt";
 
                     try (BufferedReader reader = new BufferedReader(new FileReader(contentFileName))) {
                         String line;
