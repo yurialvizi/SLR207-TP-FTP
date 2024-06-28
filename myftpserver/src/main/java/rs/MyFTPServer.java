@@ -37,8 +37,8 @@ public class MyFTPServer {
         listenerFactory.setPort(port);
 
         ConnectionConfigFactory connectionConfigFactory = new ConnectionConfigFactory();
-        connectionConfigFactory.setMaxLogins(20);
-        connectionConfigFactory.setMaxThreads(20);
+        connectionConfigFactory.setMaxLogins(30);
+        connectionConfigFactory.setMaxThreads(30);
 
         serverFactory.addListener("default", listenerFactory.createListener());
 

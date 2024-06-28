@@ -10,6 +10,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -26,7 +27,10 @@ import com.slr207.commons.messages.*;
 public class Master {
     private static final String login = "ydesene-23";
     private static final String absPath = "/dev/shm/" + login + "/";
-    private static final String storageFileName = "/cal/commoncrawl/CC-MAIN-20230320083513-20230320113513-00019.warc.wet";
+    private static final List<String> storageFileNames = Arrays.asList(
+        "/cal/commoncrawl/CC-MAIN-20230320083513-20230320113513-00019.warc.wet",
+        "/cal/commoncrawl/CC-MAIN-20230320083513-20230320113513-00020.warc.wet"
+    );
     private static String metricsFileName;
     private static String fileContent;
     private static List<String> machines;
@@ -66,6 +70,14 @@ public class Master {
         long computationTime = 0;
         long communicationTime = 0;
         long synchronizationTime = 0;
+
+        Map<String, Long> phaseTimes = new HashMap<>();
+        phaseTimes.put("FirstMap", 0L);
+        phaseTimes.put("FirstShuffle", 0L);
+        phaseTimes.put("FirstReduce", 0L);
+        phaseTimes.put("SecondMap", 0L);
+        phaseTimes.put("SecondShuffle", 0L);
+        phaseTimes.put("SecondReduce", 0L);
         
         String initialRemoteFileName = "initial-storage.txt";
 
@@ -81,31 +93,50 @@ public class Master {
         String username = "toto";
         String password = "tata";
 
-        MyFTPClient myFTPClient = new MyFTPClient(ftpPort, username, password);
+        List<MyFTPClient> ftpClients = new ArrayList<>();
+        for (int i = 0; i < totalNodes; i++) {
+            MyFTPClient ftpClient = new MyFTPClient(nodes.get(i), ftpPort, username, password);
+            ftpClient.connect();
+            ftpClients.add(ftpClient);
+        }
 
         List<String> distributedContentList = distributeContent(totalNodes);
 
         for (int i = 0; i < totalNodes; i++) {
-            myFTPClient.prepareNode(nodes.get(i));
+            ftpClients.get(i).prepareNode();
         }
 
         Logger.log("Nodes prepared");
 
+        List<Future<?>> futures = new ArrayList<>();
+        List<Sender> senders = new ArrayList<>();
+
         long tempTime = System.nanoTime();
         for (int i = 0; i < totalNodes; i++) {
-            myFTPClient.sendDocuments(initialRemoteFileName, distributedContentList.get(i), nodes.get(i));
+            final int index = i;
+            futures.add(executor.submit(() -> {
+                ftpClients.get(index).sendDocuments(initialRemoteFileName, distributedContentList.get(index));
+            }));
+        }
+
+        for (Future<?> future : futures) {
+            try {
+                future.get();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }
 
         Logger.log("Initial storage sent to nodes");
 
         communicationTime += System.nanoTime() - tempTime;
 
-        List<Future<?>> futures = new ArrayList<>();
-        List<Sender> senders = new ArrayList<>();
+        futures.clear();
         
         // ********** FIRST MAP PHASE **********
         
         tempTime = System.nanoTime();
+        long tempPhaseTime = System.nanoTime();
         for (String node : nodes) {
             StartMessage startMessage = new StartMessage(totalNodes, nodes, node);
             Sender sender = new Sender(node, senderPort, startMessage);
@@ -125,6 +156,7 @@ public class Master {
         }
 
         computationTime += System.nanoTime() - tempTime;
+        phaseTimes.put("FirstMap", System.nanoTime() - tempPhaseTime);
         
         // ********** FIRST SHUFFLE PHASE **********
 
@@ -132,6 +164,7 @@ public class Master {
         senders.clear();
         
         tempTime = System.nanoTime();
+        tempPhaseTime = System.nanoTime();
         FirstShuffleMessage shuffleMessage = new FirstShuffleMessage();
         for (String node : nodes) {
             Sender sender = new Sender(node, senderPort, shuffleMessage);
@@ -149,13 +182,15 @@ public class Master {
         }
 
         communicationTime += System.nanoTime() - tempTime;
-        
+        phaseTimes.put("FirstShuffle", System.nanoTime() - tempPhaseTime);
+
         // ********** FIRST REDUCE PHASE **********
 
         futures.clear();
         senders.clear();
         
         tempTime = System.nanoTime();
+        tempPhaseTime = System.nanoTime();
         for (String node : nodes) {
             Sender sender = new Sender(node, senderPort, new FirstReduceMessage());
             senders.add(sender);
@@ -202,6 +237,7 @@ public class Master {
         }
         
         computationTime += System.nanoTime() - tempTime;
+        phaseTimes.put("FirstReduce", System.nanoTime() - tempPhaseTime);
         
         // ********** SECOND MAP PHASE **********
 
@@ -209,6 +245,7 @@ public class Master {
         senders.clear();
 
         tempTime = System.nanoTime();
+        tempPhaseTime = System.nanoTime();
         for (String node : nodes) {
             Sender sender = new Sender(node, senderPort, new GroupsMessage(groups));
             senders.add(sender);
@@ -229,6 +266,7 @@ public class Master {
         }
 
         computationTime += System.nanoTime() - tempTime;
+        phaseTimes.put("SecondMap", System.nanoTime() - tempPhaseTime);
 
         // ********** SECOND SHUFFLE PHASE **********
 
@@ -236,6 +274,7 @@ public class Master {
         senders.clear();
 
         tempTime = System.nanoTime();
+        tempPhaseTime = System.nanoTime();
         for (String node : nodes) {
             Sender sender = new Sender(node, senderPort, new SecondShuffleMessage());
             senders.add(sender);
@@ -251,6 +290,7 @@ public class Master {
         }
 
         communicationTime += System.nanoTime() - tempTime;
+        phaseTimes.put("SecondShuffle", System.nanoTime() - tempPhaseTime);
 
         // ********** SECOND REDUCE PHASE **********
 
@@ -258,6 +298,7 @@ public class Master {
         senders.clear();
 
         tempTime = System.nanoTime();
+        tempPhaseTime = System.nanoTime();
         for (String node : nodes) {
             Sender sender = new Sender(node, senderPort, new SecondReduceMessage());
             senders.add(sender);
@@ -278,14 +319,19 @@ public class Master {
         }
 
         computationTime += System.nanoTime() - tempTime;
+        phaseTimes.put("SecondReduce", System.nanoTime() - tempPhaseTime);
 
         executor.shutdown();
 
-        writeMetrics(totalNodes, computationTime, communicationTime, synchronizationTime);
+        for (MyFTPClient ftpClient : ftpClients) {
+            ftpClient.disconnect();
+        }
+
+        writeMetrics(totalNodes, computationTime, communicationTime, synchronizationTime, phaseTimes);
     }
 
     private static void createMetricsDirectory() {
-        File directory = new File("/dev/shm/ydesene-23/metrics");
+        File directory = new File("/dev/shm/" + login + "/metrics");
         if (!directory.exists()) {
             if(directory.mkdirs()) {
                 Logger.log("Metrics directory created");
@@ -296,20 +342,35 @@ public class Master {
     }
 
     private static void writeMetrics(int totalNodes, long computationTime, long communicationTime,
-            long synchronizationTime) {
+            long synchronizationTime, Map<String, Long> phaseTimes) {
         boolean fileExists = new File(metricsFileName).exists();
 
         Logger.log("Writing metrics to file: " + metricsFileName);
 
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(metricsFileName, true))) {
             if (!fileExists) {
-                writer.write("Number of Nodes,Computation Time (ms),Communication Time (ms),Synchronization Time (ms)");
+                writer.write("Number of Nodes,"
+                            + "Computation Time (us),"
+                            + "Communication Time (us),"
+                            + "Synchronization Time (us),"
+                            + "First Map Time (us),"
+                            + "First Shuffle Time (us),"
+                            + "First Reduce Time (us),"
+                            + "Second Map Time (us),"
+                            + "Second Shuffle Time (us),"
+                            + "Second Reduce Time (us)");
                 writer.newLine();
             }
             writer.write(totalNodes + "," 
-                        + computationTime / 1_000_000 + "," 
-                        + communicationTime / 1_000_000 + "," 
-                        + synchronizationTime / 1_000_000);
+                        + computationTime / 1_000 + "," 
+                        + communicationTime / 1_000 + "," 
+                        + synchronizationTime / 1_000 + ","
+                        + phaseTimes.get("FirstMap") / 1_000 + ","
+                        + phaseTimes.get("FirstShuffle") / 1_000 + ","
+                        + phaseTimes.get("FirstReduce") / 1_000 + ","
+                        + phaseTimes.get("SecondMap") / 1_000 + ","
+                        + phaseTimes.get("SecondShuffle") / 1_000 + ","
+                        + phaseTimes.get("SecondReduce") / 1_000);
             writer.newLine();
         } catch (IOException e) {
             e.printStackTrace();
@@ -333,17 +394,19 @@ public class Master {
 
     private static void readStorageFile() {
         StringBuilder contentBuilder = new StringBuilder();
-        try (BufferedReader br = new BufferedReader(new FileReader(storageFileName))) {
-            String line;
-            while ((line = br.readLine()) != null) {
-                line = line.replaceAll("[^a-zA-Z0-9\\s]", "");
-                if (line.trim().isEmpty()) {
-                    continue;
+        for (String fileName : storageFileNames) {
+            try (BufferedReader br = new BufferedReader(new FileReader(fileName))) {
+                String line;
+                while ((line = br.readLine()) != null) {
+                    line = line.replaceAll("[^a-zA-Z0-9\\s]", "");
+                    if (line.trim().isEmpty()) {
+                        continue;
+                    }
+                    contentBuilder.append(line).append("\n");
                 }
-                contentBuilder.append(line).append("\n");
+            } catch (IOException e) {
+                e.printStackTrace();
             }
-        } catch (IOException e) {
-            e.printStackTrace();
         }
         fileContent = contentBuilder.toString();
     }
@@ -368,32 +431,4 @@ public class Master {
         
         return contentList;
     }
-
-    // private static List<String> distributeContent(String content, int totalNodes) {
-    //     List<StringBuilder> contentBuilders = new ArrayList<>(totalNodes);
-
-    //     for (int i = 0; i < totalNodes; i++) {
-    //         contentBuilders.add(new StringBuilder());
-    //     }
-
-    //     try (BufferedReader br = new BufferedReader(new FileReader(contentFileName))) {
-    //         String line;
-    //         for (int i = 0; (line = br.readLine()) != null; i++) {
-    //             line = line.replaceAll("[^a-zA-Z0-9\\s]", "");
-    //             if (line.trim().isEmpty()) {
-    //                 continue;
-    //             }
-    //             contentBuilders.get(i % totalNodes).append(line).append("\n");
-    //         }
-    //     } catch (IOException e) {
-    //         e.printStackTrace();
-    //     }
-
-    //     List<String> contentList = new ArrayList<>(totalNodes);
-    //     for (StringBuilder builder : contentBuilders) {
-    //         contentList.add(builder.toString());
-    //     }
-        
-    //     return contentList;
-    // }
 }

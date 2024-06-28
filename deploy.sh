@@ -1,7 +1,10 @@
 #!/bin/bash
 
+# Directory of the script
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
 # number of nodes
-n=18
+n=28
 
 # your list of hosts file that should contain each host in a separate line
 nodes=$(sed -n '2,$p' myftpclient/src/main/resources/machines.txt | head -n $n | xargs -I {} echo {})
@@ -14,6 +17,7 @@ login="ydesene-23"
 sshopts="-o StrictHostKeyChecking=no"
 
 remoteFolder="/dev/shm/$login/"
+localFolder="metrics/"
 mvn clean compile assembly:single
 
 execute_remote_commands() {
@@ -43,6 +47,11 @@ execute_remote_commands() {
 
     echo "Executing jar file on $node..."
     eval $command3
+
+    if [ $? -ne 0 ]; then
+        echo "Execution of $command3 failed for node $node. Please remove this node from machines.txt and try again."
+        exit 1
+    fi
 }
 
 kill_process_on_port() {
@@ -66,3 +75,14 @@ masterFilePath="myftpclient/target/"
 masterFileName="master-1-jar-with-dependencies.jar"
 echo "Executing master with argument $n"
 execute_remote_commands $master $masterFilePath $masterFileName $n
+
+
+echo "Copying metrics directory from remote machine to local machine..."
+gpg -d -q ~/.password.gpg | sshpass scp -r -o StrictHostKeyChecking=no "${login}@${master}:${remoteFolder}/metrics/" "${SCRIPT_DIR}"
+
+if [ $? -eq 0 ]; then
+    echo "Folder copied to ${SCRIPT_DIR}"
+else
+    echo "Failed to copy folder"
+    exit 1
+fi

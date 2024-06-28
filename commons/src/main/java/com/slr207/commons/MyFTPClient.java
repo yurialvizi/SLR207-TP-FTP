@@ -6,32 +6,57 @@ import org.apache.commons.net.ftp.FTPFile;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 
 public class MyFTPClient {
+    private FTPClient ftpClient = new FTPClient();
     String username;
     String password;
     int ftpPort;
+    String server;
 
-    public MyFTPClient(int ftpPort, String username, String password) {
+    public MyFTPClient(String server, int ftpPort, String username, String password) {
         this.username = username;
         this.password = password;
         this.ftpPort = ftpPort;
+        this.server = server;
     }
 
-    public void sendDocuments(String fileName, String content, String server) {
-        FTPClient ftpClient = new FTPClient();
+    public boolean connect() {
         try {
             ftpClient.connect(server, ftpPort);
             if (!ftpClient.login(username, password)) {
                 Logger.log("FTP login failed for server: " + server);
-                return;
+                return false;
             }
-
             ftpClient.enterLocalPassiveMode();
             ftpClient.setFileType(FTP.BINARY_FILE_TYPE);
+            return true;
+        } catch (IOException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
 
+    public void disconnect() {
+        try {
+            if (ftpClient.isConnected()) {
+                ftpClient.logout();
+                ftpClient.disconnect();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void sendDocuments(String fileName, String content) {
+        if (!ftpClient.isConnected()) {
+            connect();
+        }
+
+        try {
             // Check if the file exists on the server
             FTPFile[] files = ftpClient.listFiles();
             boolean fileExists = false;
@@ -63,16 +88,14 @@ public class MyFTPClient {
                 ftpClient.completePendingCommand();
             }
 
-            ftpClient.logout();
-            ftpClient.disconnect();
-
-        } catch (Exception e) {
+        } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
+
     // delete shuffled.txt file from the server
-    public void prepareNode(String server) {
+    public void prepareNode() {
         FTPClient ftpClient = new FTPClient();
         try {
             ftpClient.connect(server, ftpPort);

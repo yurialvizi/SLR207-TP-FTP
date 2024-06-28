@@ -10,6 +10,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.ftpserver.FtpServer;
 
@@ -27,12 +30,11 @@ public class Node {
         int receiverPort = 5524;
 
         MyFTPServer myFTPServer = new MyFTPServer(ftpPort);
-        MyFTPClient myFTPClient = new MyFTPClient(ftpPort, "toto", "tata");
 
         FtpServer ftpServer = myFTPServer.createServer();
         
         try {
-            Receiver receiver = new Receiver(receiverPort, createMessageProcessor(myFTPClient, absPath + "toto/"));
+            Receiver receiver = new Receiver(receiverPort, createMessageProcessor(absPath + "toto/"));
             Thread receiverThread = new Thread(receiver);
             receiverThread.start();
             ftpServer.start();
@@ -42,12 +44,13 @@ public class Node {
         }
     }
 
-    public static MessageProcessor createMessageProcessor(MyFTPClient myFTPClient, String absPath) {
+    public static MessageProcessor createMessageProcessor(String absPath) {
        return new MessageProcessor() {
             private int totalNodes;
             private List<String> nodeServerList;
             private String myServer;
             private Map<String, String> secondMap;
+            private List<MyFTPClient> ftpClients = new ArrayList<>();
 
             @Override
             public void process(Message message, ObjectOutputStream out) {
@@ -58,6 +61,8 @@ public class Node {
                     totalNodes = startMessage.getTotalNodes();
                     nodeServerList = startMessage.getNodeServerList();
                     myServer = startMessage.getYourOwnServer();
+
+                    initializeFTPClient();
                     
                     Logger.log("Total number of nodes: " + totalNodes);
                     Logger.log("IP addresses of all nodes: " + nodeServerList);
@@ -71,7 +76,7 @@ public class Node {
                         e.printStackTrace();
                     } 
 
-                    sendResponse(out, new FirstShuffleFinishedMessage());
+                    sendResponse(out, new FirstMapFinishedMessage());
                 } else if (message instanceof FirstShuffleMessage) {
                     Map<String, Integer> mappedContent = new HashMap<>();
 
@@ -96,10 +101,17 @@ public class Node {
                     }
 
                     List<Map<String, Integer>> contentToBeSentList = distributeMap(mappedContent);
+
+                    List<Runnable> sendDocumentTasks = new ArrayList<>();
                     for (int i = 0; i < totalNodes; i++) {
-                        String content = mapToString(contentToBeSentList.get(i));
-                        myFTPClient.sendDocuments("shuffled_"+ myServer +".txt", content, nodeServerList.get(i));
+                        final int index = i;
+                        sendDocumentTasks.add(() -> {
+                            String content = mapToString(contentToBeSentList.get(index));
+                            ftpClients.get(index).sendDocuments("shuffled_" + myServer + ".txt", content);
+                        });
                     }
+
+                    executeTasksInParallel(sendDocumentTasks, totalNodes);
 
                     sendResponse(out, new FirstShuffleFinishedMessage());
                 } else if (message instanceof FirstReduceMessage) {
@@ -198,9 +210,17 @@ public class Node {
                     }
 
                     sendResponse(out, new SecondReduceFinishedMessage());
+                    ftpClients.forEach(MyFTPClient::disconnect);
                 } else {
                     Logger.log("Received a message from the master.");
                     Logger.log("Message: " + message);
+                }
+            }
+
+            private void initializeFTPClient() {
+                for (String node : nodeServerList) {
+                    MyFTPClient ftpClient = new MyFTPClient(node, 2505, "toto", "tata");
+                    ftpClients.add(ftpClient);
                 }
             }
 
@@ -308,9 +328,17 @@ public class Node {
             }
             
             private void sendContentToGroups() {
+                List<Runnable> sendDocumentTasks = new ArrayList<>();
+                
                 for (String node : secondMap.keySet()) {
-                    myFTPClient.sendDocuments("grouped_" + myServer + ".txt", secondMap.get(node), node);
+                    int index = nodeServerList.indexOf(node);
+                    sendDocumentTasks.add(() -> {
+                        ftpClients.get(index).sendDocuments("grouped_" + myServer + ".txt", secondMap.get(node));
+                    });
                 }
+
+                executeTasksInParallel(sendDocumentTasks, secondMap.size());
+
             }
 
             private void printReceivedMessage(MessageType messageType) {
@@ -326,6 +354,25 @@ public class Node {
                     e.printStackTrace();
                 }
             }
+
+        private void executeTasksInParallel(List<Runnable> tasks, int numberOfThreads) {
+        ExecutorService executorService = Executors.newFixedThreadPool(numberOfThreads);
+
+        for (Runnable task : tasks) {
+            executorService.submit(task);
+        }
+
+        executorService.shutdown();
+        try {
+            // Wait for all tasks to complete
+            if (!executorService.awaitTermination(60, TimeUnit.SECONDS)) {
+                executorService.shutdownNow(); // Force shutdown
+            }
+        } catch (InterruptedException e) {
+            executorService.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+    }
         };
     }
             
