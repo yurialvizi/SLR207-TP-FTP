@@ -20,11 +20,11 @@ import com.slr207.commons.MyFTPClient;
 import com.slr207.commons.Receiver;
 
 public class Node {
+    public static final String login = "ydesene-23";
+    public static final String absPath = "/dev/shm/" + login + "/";
     public static void main(String[] args) {
         int ftpPort = 2505;
         int receiverPort = 5524;
-
-        String absPath = "/dev/shm/ydesene-23/toto/";
 
         MyFTPServer myFTPServer = new MyFTPServer(ftpPort);
         MyFTPClient myFTPClient = new MyFTPClient(ftpPort, "toto", "tata");
@@ -32,7 +32,7 @@ public class Node {
         FtpServer ftpServer = myFTPServer.createServer();
         
         try {
-            Receiver receiver = new Receiver(receiverPort, createMessageProcessor(myFTPClient, absPath));
+            Receiver receiver = new Receiver(receiverPort, createMessageProcessor(myFTPClient, absPath + "toto/"));
             Thread receiverThread = new Thread(receiver);
             receiverThread.start();
             ftpServer.start();

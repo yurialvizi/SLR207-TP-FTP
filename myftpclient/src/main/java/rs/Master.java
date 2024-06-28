@@ -24,6 +24,8 @@ import com.slr207.commons.Sender;
 import com.slr207.commons.messages.*;
 
 public class Master {
+    private static final String login = "ydesene-23";
+    private static final String absPath = "/dev/shm/" + login + "/";
     private static final String storageFileName = "/cal/commoncrawl/CC-MAIN-20230320083513-20230320113513-00019.warc.wet";
     private static String metricsFileName;
     private static String fileContent;
@@ -36,7 +38,7 @@ public class Master {
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd-HHmmss");
         String currentTimestamp = sdf.format(new Date());
 
-        metricsFileName = "/dev/shm/ydesene-23/metrics/metrics_" + currentTimestamp + ".csv";
+        metricsFileName = absPath + "metrics/metrics_" + currentTimestamp + ".csv";
 
         createMetricsDirectory();
 
