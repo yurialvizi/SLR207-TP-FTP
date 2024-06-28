@@ -93,8 +93,6 @@ public class Node {
                         }
                     } catch (IOException e) {
                         e.printStackTrace();
-                        System.out.println("Error reading mapped.txt");
-                        System.exit(1);
                     }
 
                     List<Map<String, Integer>> contentToBeSentList = distributeMap(mappedContent);
