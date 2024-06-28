@@ -20,13 +20,13 @@ import com.slr207.commons.MyFTPClient;
 import com.slr207.commons.Receiver;
 
 public class Node {
+    private static final String login = "ydesene-23";
+    private static final String absPath = "/dev/shm/" + login + "/toto/";
     public static void main(String[] args) {
         int ftpPort = 2505;
         int receiverPort = 5524;
 
-        String absPath = "/dev/shm/ydesene-23/toto/";
-
-        MyFTPServer myFTPServer = new MyFTPServer(ftpPort);
+        MyFTPServer myFTPServer = new MyFTPServer(ftpPort, absPath);
         MyFTPClient myFTPClient = new MyFTPClient(ftpPort, "toto", "tata");
 
         FtpServer ftpServer = myFTPServer.createServer();

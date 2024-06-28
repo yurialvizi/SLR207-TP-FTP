@@ -23,10 +23,12 @@ import com.slr207.commons.Logger;
 public class MyFTPServer {
     private int port;
     private FtpServerFactory serverFactory;
+    private String absPath;
 
-    public MyFTPServer(int port) {
+    public MyFTPServer(int port, String absPath) {
         this.port = port;
         this.serverFactory = setServerFactory();
+        this.absPath = absPath;
     }
 
     private FtpServerFactory setServerFactory() {
@@ -66,7 +68,7 @@ public class MyFTPServer {
         user.setName("toto"); // Replace "username" with the desired username
         user.setPassword("tata"); // Replace "password" with the desired password
         String username = user.getName();
-        String homeDirectory = "/dev/shm/ydesene-23/" + username;
+        String homeDirectory = absPath + username;
         File directory = new File(homeDirectory); // Convert the string to a File object
         if (!directory.exists()) { // Check if the directory exists
             if (directory.mkdirs()) {
