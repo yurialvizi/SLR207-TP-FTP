@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.ftpserver.ConnectionConfigFactory;
 import org.apache.ftpserver.FtpServer;
 import org.apache.ftpserver.FtpServerFactory;
 import org.apache.ftpserver.ftplet.Authority;
@@ -34,6 +35,10 @@ public class MyFTPServer {
 
         ListenerFactory listenerFactory = new ListenerFactory();
         listenerFactory.setPort(port);
+
+        ConnectionConfigFactory connectionConfigFactory = new ConnectionConfigFactory();
+        connectionConfigFactory.setMaxLogins(20);
+        connectionConfigFactory.setMaxThreads(20);
 
         serverFactory.addListener("default", listenerFactory.createListener());
 
