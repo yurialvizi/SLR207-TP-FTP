@@ -8,7 +8,9 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,28 +24,53 @@ import com.slr207.commons.Sender;
 import com.slr207.commons.messages.*;
 
 public class Master {
+    private static final String storageFileName = "/cal/commoncrawl/CC-MAIN-20230320083513-20230320113513-00019.warc.wet";
+    private static String metricsFileName;
+    private static String fileContent;
+    private static List<String> machines;
     
     public static void main(String[] args) {
-        long computationTime = 0;
-        long communicationTime = 0;
-        long synchronizationTime = 0;
+        int maxNodes = args.length > 0 ? Integer.parseInt(args[0]) : 3;
+        
+        // Create the metrics file with timestamp formatted
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd-HHmmss");
+        String currentTimestamp = sdf.format(new Date());
 
+        metricsFileName = "/dev/shm/ydesene-23/metrics/metrics_" + currentTimestamp + ".csv";
+
+        createMetricsDirectory();
+
+        // Read the storage file
+        Logger.log("Reading storage file");
+        readStorageFile();
+
+        // Read the machines file
         String nodesFileName = "/machines.txt";
-        String initialRemoteFileName = "initial-storage.txt";
+        machines = readMachinesFromResource(nodesFileName, maxNodes);
 
-        int totalNodes = args.length > 0 ? Integer.parseInt(args[0]) : 3;
-
-        List<String> nodes = readMachinesFromResource(nodesFileName, totalNodes);
-
-        if (nodes.size() < totalNodes) {
-            Logger.log("Not enough available nodes in the file");
+        if (machines.size() < maxNodes) {
+            Logger.log("Not enough available machines in the file");
             return;
         }
 
+        for (int i = 0; i < maxNodes; i++) {
+            System.out.println();
+            Logger.log("-----------Executing for " + (i + 1) + " nodes");
+            executeForTotalNodes(i + 1);
+        }
+    }
+    
+    public static void executeForTotalNodes(int totalNodes) {
+        long computationTime = 0;
+        long communicationTime = 0;
+        long synchronizationTime = 0;
+        
+        String initialRemoteFileName = "initial-storage.txt";
+
+        List<String> nodes = new ArrayList<>(machines.subList(0, totalNodes));
+        
         Logger.log("Nodes: " + nodes);
-
-        String storageFileName = "/cal/commoncrawl/CC-MAIN-20230320083513-20230320113513-00019.warc.wet";
-
+        
         ExecutorService executor = Executors.newFixedThreadPool(totalNodes);
     
         int ftpPort = 2505;
@@ -54,8 +81,7 @@ public class Master {
 
         MyFTPClient myFTPClient = new MyFTPClient(ftpPort, username, password);
 
-        Logger.log("Reading storage file");
-        List<String> distributedContentList = readStorageFile(storageFileName, myFTPClient, totalNodes);
+        List<String> distributedContentList = distributeContent(totalNodes);
 
         for (int i = 0; i < totalNodes; i++) {
             myFTPClient.prepareNode(nodes.get(i));
@@ -256,15 +282,24 @@ public class Master {
         writeMetrics(totalNodes, computationTime, communicationTime, synchronizationTime);
     }
 
+    private static void createMetricsDirectory() {
+        File directory = new File("/dev/shm/ydesene-23/metrics");
+        if (!directory.exists()) {
+            if(directory.mkdirs()) {
+                Logger.log("Metrics directory created");
+            } else {
+                Logger.log("Failed to create metrics directory");
+            }
+        }
+    }
+
     private static void writeMetrics(int totalNodes, long computationTime, long communicationTime,
             long synchronizationTime) {
-        String filename = "/dev/shm/ydesene-23/metrics/metrics.csv";
+        boolean fileExists = new File(metricsFileName).exists();
 
-        boolean fileExists = new File(filename).exists();
+        Logger.log("Writing metrics to file: " + metricsFileName);
 
-        Logger.log("Writing metrics to file: " + filename);
-
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter(filename, true))) {
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(metricsFileName, true))) {
             if (!fileExists) {
                 writer.write("Number of Nodes,Computation Time (ms),Communication Time (ms),Synchronization Time (ms)");
                 writer.newLine();
@@ -294,24 +329,34 @@ public class Master {
         return machines;
     }
 
-    private static List<String> readStorageFile(String contentFileName, MyFTPClient myFTPClient, int totalNodes) {
+    private static void readStorageFile() {
+        StringBuilder contentBuilder = new StringBuilder();
+        try (BufferedReader br = new BufferedReader(new FileReader(storageFileName))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                line = line.replaceAll("[^a-zA-Z0-9\\s]", "");
+                if (line.trim().isEmpty()) {
+                    continue;
+                }
+                contentBuilder.append(line).append("\n");
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        fileContent = contentBuilder.toString();
+    }
+
+    private static List<String> distributeContent(int totalNodes) {
         List<StringBuilder> contentBuilders = new ArrayList<>(totalNodes);
 
         for (int i = 0; i < totalNodes; i++) {
             contentBuilders.add(new StringBuilder());
         }
 
-        try (BufferedReader br = new BufferedReader(new FileReader(contentFileName))) {
-            String line;
-            for (int i = 0; (line = br.readLine()) != null; i++) {
-                line = line.replaceAll("[^a-zA-Z0-9\\s]", "");
-                if (line.trim().isEmpty()) {
-                    continue;
-                }
-                contentBuilders.get(i % totalNodes).append(line).append("\n");
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
+        String[] lines = fileContent.split("\n");
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i];
+            contentBuilders.get(i % totalNodes).append(line).append("\n");
         }
 
         List<String> contentList = new ArrayList<>(totalNodes);
@@ -321,4 +366,32 @@ public class Master {
         
         return contentList;
     }
+
+    // private static List<String> distributeContent(String content, int totalNodes) {
+    //     List<StringBuilder> contentBuilders = new ArrayList<>(totalNodes);
+
+    //     for (int i = 0; i < totalNodes; i++) {
+    //         contentBuilders.add(new StringBuilder());
+    //     }
+
+    //     try (BufferedReader br = new BufferedReader(new FileReader(contentFileName))) {
+    //         String line;
+    //         for (int i = 0; (line = br.readLine()) != null; i++) {
+    //             line = line.replaceAll("[^a-zA-Z0-9\\s]", "");
+    //             if (line.trim().isEmpty()) {
+    //                 continue;
+    //             }
+    //             contentBuilders.get(i % totalNodes).append(line).append("\n");
+    //         }
+    //     } catch (IOException e) {
+    //         e.printStackTrace();
+    //     }
+
+    //     List<String> contentList = new ArrayList<>(totalNodes);
+    //     for (StringBuilder builder : contentBuilders) {
+    //         contentList.add(builder.toString());
+    //     }
+        
+    //     return contentList;
+    // }
 }
